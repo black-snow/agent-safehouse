@@ -10,6 +10,51 @@
 
 - No profiles changed.
 
+## [0.11.0] - 2026-07-07
+
+### Upgrade Notes
+
+- Breaking: UNIX-socket access is now denied by default. Custom setups which rely on communicating with a UNIX socket may now need an `--append-profile` with an `(allow network-outbound (remote unix-socket (path-literal "/path/to/my.sock"))` grant.
+- Breaking: Sandboxed agents can no longer write to the workdir `.safehouse` config or to any `--append-profile` file by default. If your workflow requires an agent to edit its own policy files use `--allow-workdir-config-writes` or `--allow-profile-writes`.
+
+### Features
+
+- The `.safehouse` workdir config now supports `enable=` and `append-profile=` keys, in addition to the existing `add-dirs-ro` and `add-dirs` keys, so a trusted workdir can enable integrations and add a custom profile without extra CLI flags.
+- Workdirs can be trusted via `--always-trust-workdir-config`, enabling the use of its `<workdir>/.safehouse` config without needing to always provide the `--trust-workdir-config` option.
+- `--enable=1password` now supports configuring `op-ssh-sign` for Git commit signing using `gpg.ssh.program`.
+- `fnm use` now works to change the node version. Previously only the initial node version could be used.
+
+### Bug Fixes
+
+- `--enable=docker` now grants read access to the `Docker.app` bundle, so the `docker` command no longer fails at startup.
+- `--enable=shell-init` now supports the `bash` shell.
+- Node global packages under `~/.local/lib/node_modules` are now readable, fixing fnm/XDG prefix setups where globally installed CLIs could not be run.
+
+### Chores
+
+- Fixed Rust toolchain installation in the macOS CI workflow.
+- Hardened the e2e tmux harness by preserving the respawn working directory and isolating tmux servers between runs.
+- Documented that `--enable=shell-init` can expose credentials stored in shell env files.
+- Documented that Chromium-based browsers need `--no-sandbox` when run inside the sandbox.
+- Agent Safehouse contributors using Claude Code will now load agent instructions correctly, by adding a symlink from `CLAUDE.md` to the existing `AGENTS.md`.
+
+### Thanks
+
+- @davidfstr for joining the maintainer team and shepherding several PRs to merge for this release.
+- @tomc-goodrx for designing and prototyping the trusted `.safehouse` workdir config feature set — `enable=`/`append-profile=` keys, persistent trust, and write protection for config and appended profiles — landed in [#77](https://github.com/eugene1g/agent-safehouse/pull/77), [#78](https://github.com/eugene1g/agent-safehouse/pull/78), [#79](https://github.com/eugene1g/agent-safehouse/pull/79), and [#80](https://github.com/eugene1g/agent-safehouse/pull/80).
+- @black-snow fixing Docker Desktop app-bundle access in [#129](https://github.com/eugene1g/agent-safehouse/pull/129), fnm multishell read/write in [#130](https://github.com/eugene1g/agent-safehouse/pull/130), and Node global package reads in [#132](https://github.com/eugene1g/agent-safehouse/pull/132).
+- @d0ugal for adding support for 1Password `op-ssh-sign` commit signing in [#108](https://github.com/eugene1g/agent-safehouse/pull/108).
+- @leemeo3 documenting the shell-init credential exposure warning in [#122](https://github.com/eugene1g/agent-safehouse/pull/122) and the Chromium `--no-sandbox` requirement in [#128](https://github.com/eugene1g/agent-safehouse/pull/128).
+
+### Changed Sandboxing Profiles
+
+- [`20-network.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.10.1...v0.11.0#diff-2204b16cdfcda231f4cb64889b5cf29b528d4ecdab3bad9b81e8793ecd5aba64): Replaced the blanket `(allow network*)` with explicit TCP/UDP + DNS grants so UNIX-socket access is no longer permitted by default.
+- [`30-toolchains/node.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.10.1...v0.11.0#diff-94a5c97eafdc81daa5ae1e467d55943959ac559f14c59d8c3af198e716ad311f): Added the fnm per-shell multishell directory and read access to `~/.local/lib/node_modules` for XDG-prefix global packages.
+- [`1password.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.10.1...v0.11.0#diff-dae0a12c26e11eedc851247d601cccdd0445d3918b0ade4cdc869d3ffb23b585): Added read access to the `1Password.app` bundle so `op-ssh-sign` can run for Git commit signing.
+- [`chromium-full.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.10.1...v0.11.0#diff-d542719401c3da098b9f40fa32c7f156af327e4ac8e980ef85b48d73fe7c2e82): Added `ProcessSingleton` `SingletonSocket` bind/inbound/outbound grants so Chrome for Testing can launch under the socket-restricted network policy.
+- [`docker.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.10.1...v0.11.0#diff-2a99b527bf61c193bd84db192fc7c84224ff91cb9ecacede2c2672c45d2e5124): Added `Docker.app` bundle read access so the `docker` CLI symlink resolves.
+- [`shell-init.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.10.1...v0.11.0#diff-b4e8dd0043aab271dfa6bf04dec2110baca715ff9a4d6032d22f32ea88a3dd08): Added the user-level bash startup files so interactive bash sessions can source their own init.
+
 ## [0.10.1] - 2026-05-20
 
 ### Bug Fixes

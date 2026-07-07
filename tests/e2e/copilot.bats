@@ -15,6 +15,9 @@ load agent_tui_harness.bash
   local trust_gate_pattern='Confirm folder trust|Do you trust the files in this folder\?'
   local permission_gate_pattern=""
   local restart_gate_pattern=""
+  # Print if the `copilot` on PATH is the VS Code Copilot Chat launcher shim rather
+  # than the standalone GitHub Copilot CLI
+  local vsc_copilot_pattern='Cannot find GitHub Copilot CLI'
 
   prepare_agent_state "${agent_home}" "${config_dir}"
   login_agent "${config_dir}" "${auth_log_path}"
@@ -71,6 +74,10 @@ handle_startup_gates() {
     combined_pattern="${combined_pattern}|${gate_pattern}"
   done
 
+  if [[ -n "${vsc_copilot_pattern:-}" ]]; then
+    combined_pattern="${combined_pattern}|${vsc_copilot_pattern}"
+  fi
+
   sft_tmux_wait_until_regex \
     "${combined_pattern}" \
     "${AGENT_TUI_STARTUP_WAIT_SECS}" \
@@ -79,6 +86,10 @@ handle_startup_gates() {
       sft_agent_tui_write_screen_capture >&2 || true
       return 1
     }
+
+  if [[ -n "${vsc_copilot_pattern:-}" ]] && sft_tmux_matches_regex "${vsc_copilot_pattern}"; then
+    skip "GitHub Copilot CLI not installed, although VS Code Copilot Chat launcher is present"
+  fi
 
   if sft_tmux_matches_regex "${input_ready_pattern}"; then
     return 0

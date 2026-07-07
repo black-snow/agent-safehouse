@@ -176,6 +176,8 @@ Config file:
       Supports keys:
         add-dirs-ro=PATHS
         add-dirs=PATHS
+        append-profile=PATH
+        enable=FEATURES
 
   ~/.config/safehouse/trusted-workdirs (optional, always read)
       One trusted directory path per line; blank lines and # comments allowed

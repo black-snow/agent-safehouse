@@ -25,8 +25,8 @@
 )
 
 ;; Docker/Podman clients use connect() on unix domain sockets, which sandbox-exec
-;; classifies as network-outbound — not file-read/write. Without this deny block,
-;; the file-level deny above is bypassed entirely.
+;; classifies as network-outbound — not file-read/write. Deny-by-default network policy
+;; in 20-network.sb should block these connects already, so this is defense-in-depth.
 (deny network-outbound
     (remote unix-socket (path-literal "/var/run/docker.sock"))
     (remote unix-socket (path-literal "/private/var/run/docker.sock"))

@@ -42,13 +42,17 @@
 ;; SSH agent socket access via launchd-managed SSH_AUTH_SOCK and Tahoe-style
 ;; ~/.ssh/agent sockets.
 (allow file-read* file-write*
-    (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")  ;; launchd-managed SSH_AUTH_SOCK path on macOS.
-    (regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")          ;; symlinked tmp variant of SSH_AUTH_SOCK path.
-    (home-subpath "/.ssh/agent")                                    ;; macOS 26 ssh-agent socket directory (e.g. ~/.ssh/agent/s.*).
+    (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")      ;; launchd-managed SSH_AUTH_SOCK path on macOS (<= Tahoe 26.3, Sequoia and earlier).
+    (regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")              ;; symlinked tmp variant of SSH_AUTH_SOCK path.
+    (regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$")  ;; launchd-managed SSH_AUTH_SOCK path on macOS Tahoe 26.4+ (moved from /private/tmp).
+    (regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$")          ;; symlinked var/run variant of SSH_AUTH_SOCK path.
+    (home-subpath "/.ssh/agent")                                       ;; macOS 26 ssh-agent socket directory (e.g. ~/.ssh/agent/s.*).
 )
 
 (allow network-outbound
     (remote unix-socket (path-regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$"))
     (remote unix-socket (path-regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$"))
+    (remote unix-socket (path-regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))
+    (remote unix-socket (path-regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))
     (remote unix-socket (path-regex (string-append "^" HOME_DIR "/\\.ssh/agent(/.*)?$")))
 )

@@ -65,6 +65,35 @@ cleanup_ssh_agent() {
   sft_assert_order "$profile" "$(sft_source_marker "50-integrations-core/ssh-agent-default-deny.sb")" "$(sft_source_marker "55-integrations-optional/ssh.sb")"
 }
 
+@test "[POLICY-ONLY] enable=ssh allowlists launchd SSH_AUTH_SOCK sockets at both /tmp and /var/run locations" { # https://github.com/eugene1g/agent-safehouse/issues/138
+  # SSH_AUTH_SOCK moved from /private/tmp (Sequoia, Tahoe <= 26.3) to
+  # /private/var/run (Tahoe 26.4+); both must be allowed for file access and
+  # unix-socket connect. This assertion is host-macOS-version-independent.
+  local profile
+  profile="$(safehouse_profile --enable=ssh)"
+
+  # File access grants.
+  sft_assert_contains "$profile" '(regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")'
+  sft_assert_contains "$profile" '(regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")'
+  sft_assert_contains "$profile" '(regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$")'
+  sft_assert_contains "$profile" '(regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$")'
+
+  # network-outbound unix-socket connect grants.
+  sft_assert_contains "$profile" '(remote unix-socket (path-regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))'
+  sft_assert_contains "$profile" '(remote unix-socket (path-regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))'
+}
+
+@test "[POLICY-ONLY] default profile keeps /var/run launchd agent sockets opt-in via defense-in-depth deny" { # https://github.com/eugene1g/agent-safehouse/issues/138
+  # Without --enable=ssh the /var/run agent socket must not be reachable. It is
+  # denied by (deny default) already; this asserts the explicit belt-and-suspenders
+  # deny stays symmetric with the historical /tmp locations.
+  local profile
+  profile="$(safehouse_profile)"
+
+  sft_assert_contains "$profile" '(remote unix-socket (path-regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))'
+  sft_assert_contains "$profile" '(remote unix-socket (path-regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))'
+}
+
 @test "[EXECUTION] ssh agent sockets require enable=ssh" { # https://github.com/eugene1g/agent-safehouse/issues/36
   local fake_home ssh_dir sock key ssh_keygen_bin ssh_add_bin
   local ls_status default_agent_status enable_ls_status enable_agent_status
@@ -117,7 +146,10 @@ cleanup_ssh_agent() {
   [ -n "$ssh_auth_sock" ] || skip "SSH_AUTH_SOCK is unset"
   [ -e "$ssh_auth_sock" ] || skip "SSH_AUTH_SOCK path does not exist"
 
-  if [[ ! "$ssh_auth_sock" =~ ^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$ ]] && [[ ! "$ssh_auth_sock" =~ ^/tmp/com\.apple\.launchd\.[^/]+/Listeners$ ]]; then
+  if [[ ! "$ssh_auth_sock" =~ ^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$ ]] &&
+     [[ ! "$ssh_auth_sock" =~ ^/tmp/com\.apple\.launchd\.[^/]+/Listeners$ ]] &&
+     [[ ! "$ssh_auth_sock" =~ ^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$ ]] &&
+     [[ ! "$ssh_auth_sock" =~ ^/var/run/com\.apple\.launchd\.[^/]+/Listeners$ ]]; then
     skip "SSH_AUTH_SOCK does not match a launchd listener path"
   fi
 

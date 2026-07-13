@@ -45,7 +45,16 @@ concurrency:
 
 jobs:
   test-macos:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # "latest" and "latest - 1" macOS coverage.
+        # NOTE: The "macos-latest" runner can resolve to different major versions of macOS
+        #       when rerun only minutes apart, so it is not safe for deterministic use.
+        runner:
+          - macos-26
+          - macos-15
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout branch

@@ -39,9 +39,10 @@
     (home-literal "/.ssh/agent")
 )
 
-;; SSH agent socket access via launchd-managed SSH_AUTH_SOCK and Tahoe-style
-;; ~/.ssh/agent sockets.
-(allow file-read* file-write*
+;; SSH agent socket access via launchd-managed SSH_AUTH_SOCK and Tahoe-style ~/.ssh/agent sockets.
+;; NOTE: file-read-metadata is named explicitly to match the specificity of the default deny in
+;;       10-system-runtime.sb. A general allow would lose to that specific deny regardless of order.
+(allow file-read* file-write* file-read-metadata
     (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")      ;; launchd-managed SSH_AUTH_SOCK path on macOS (<= Tahoe 26.3, Sequoia and earlier).
     (regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")              ;; symlinked tmp variant of SSH_AUTH_SOCK path.
     (regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$")  ;; launchd-managed SSH_AUTH_SOCK path on macOS Tahoe 26.4+ (moved from /private/tmp).

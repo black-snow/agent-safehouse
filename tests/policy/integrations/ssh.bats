@@ -73,6 +73,10 @@ cleanup_ssh_agent() {
   profile="$(safehouse_profile --enable=ssh)"
 
   # File access grants.
+  # NOTE: The allow must name file-read-metadata explicitly to match the
+  #       specificity of the default deny in 10-system-runtime.sb.
+  #       A general file-read* allow alone loses to a specific deny regardless of profile order.
+  sft_assert_contains "$profile" '(allow file-read* file-write* file-read-metadata'
   sft_assert_contains "$profile" '(regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")'
   sft_assert_contains "$profile" '(regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")'
   sft_assert_contains "$profile" '(regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$")'
@@ -92,6 +96,16 @@ cleanup_ssh_agent() {
 
   sft_assert_contains "$profile" '(remote unix-socket (path-regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))'
   sft_assert_contains "$profile" '(remote unix-socket (path-regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$"))'
+
+  # File access deny.
+  # NOTE: file-read-metadata must be named explicitly. A general file-read* deny
+  #       would lose to the specific file-read-metadata subpath allow for
+  #       /private/var/run traversal.
+  sft_assert_contains "$profile" '(deny file-read* file-write* file-read-metadata'
+  sft_assert_contains "$profile" '(regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")'
+  sft_assert_contains "$profile" '(regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")'
+  sft_assert_contains "$profile" '(regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$")'
+  sft_assert_contains "$profile" '(regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$")'
 }
 
 @test "[EXECUTION] ssh agent sockets require enable=ssh" { # https://github.com/eugene1g/agent-safehouse/issues/36

@@ -112,9 +112,16 @@
 )
 
 ;; Defense-in-depth: keep launchd-managed per-user listener sockets opt-in by specific integration profiles.
-(deny file-read* file-write*
-    (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")   ;; Real tmp namespace for launchd listener sockets (SSH agent, pasteboard, etc.).
-    (regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")           ;; Symlinked /tmp view of the same launchd listener sockets.
+;; NOTE: file-read-metadata is named explicitly even though file-read* covers it
+;;       so that the specific /private/var/run deny here takes precedence over
+;;       the general /private/var/run allow elsewhere in this profile.
+;;       Opt-in profiles (like ssh.sb) must allow at the same specificity
+;;       to override this deny.
+(deny file-read* file-write* file-read-metadata
+    (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")     ;; Real tmp namespace for launchd listener sockets (SSH agent, pasteboard, etc.); Tahoe <= 26.3, Sequoia and earlier.
+    (regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")             ;; Symlinked /tmp view of the same launchd listener sockets.
+    (regex #"^/private/var/run/com\.apple\.launchd\.[^/]+/Listeners$") ;; Real var/run namespace for launchd listener sockets on macOS Tahoe 26.4+ (moved from /private/tmp).
+    (regex #"^/var/run/com\.apple\.launchd\.[^/]+/Listeners$")         ;; Symlinked /var/run view of the same launchd listener sockets.
 )
 
 ;; Device nodes needed for shell I/O, PTYs, and descriptor plumbing in local LLM agent terminal workflows.

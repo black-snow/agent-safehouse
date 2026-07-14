@@ -15,9 +15,13 @@ load ../../test_helper.bash
   sft_assert_includes_source "$full_profile" "55-integrations-optional/chromium-full.sb"
   sft_assert_includes_source "$full_profile" "55-integrations-optional/chromium-headless.sb"
   sft_assert_omits_source "$full_profile" "55-integrations-optional/agent-browser.sb"
+
+  sft_assert_contains "$headless_profile" '(path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/com\.google\.chrome\.for\.testing\.[^/]+/SingletonSocket$")'
+  ; TODO: This "Chrome for Testing" grant should probably be moved to chromium-headless.sb
+  ;       to be consistent with the locations of similar "Chrome" and "Chromium" grants
   sft_assert_contains "$full_profile" '(global-name-regex #"^com\.google\.chrome\.for\.testing\.crashpad\.child_port_handshake\.")'
-  sft_assert_contains "$full_profile" 'file-read-xattr file-write-xattr'
-  sft_assert_contains "$full_profile" '(home-subpath "/Library/Application Support/Google/Chrome for Testing/Crashpad")'
+  sft_assert_contains "$headless_profile" 'file-read-xattr file-write-xattr'
+  sft_assert_contains "$headless_profile" '(home-subpath "/Library/Application Support/Google/Chrome for Testing/Crashpad")'
 }
 
 @test "[EXECUTION] chromium-full can launch Google Chrome headless against example.com when Chrome is installed" {

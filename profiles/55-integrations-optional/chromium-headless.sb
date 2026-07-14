@@ -129,14 +129,16 @@
 (allow network-bind network-inbound
     (local unix-socket
         (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/com\.google\.Chrome\.[^/]+/SingletonSocket$"))
-    ; TODO: Add path-regex for Chrome for Testing here
+    (local unix-socket
+        (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/com\.google\.chrome\.for\.testing\.[^/]+/SingletonSocket$"))
     (local unix-socket
         (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/\.org\.chromium\.Chromium\.[^/]+/SingletonSocket$"))
 )
 (allow network-outbound
     (remote unix-socket
         (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/com\.google\.Chrome\.[^/]+/SingletonSocket$"))
-    ; TODO: Add path-regex for Chrome for Testing here
+    (remote unix-socket
+        (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/com\.google\.chrome\.for\.testing\.[^/]+/SingletonSocket$"))
     (remote unix-socket
         (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/\.org\.chromium\.Chromium\.[^/]+/SingletonSocket$"))
 )

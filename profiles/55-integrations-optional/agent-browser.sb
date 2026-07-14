@@ -27,3 +27,17 @@
     (home-literal "/Library")                                         ;; pnpm-installed shims under ~/Library/pnpm require ancestor traversal during Node entrypoint resolution.
     (home-literal "/Library/pnpm")
 )
+
+;; The agent-browser CLI talks to a per-session daemon over a UNIX socket at
+;; ~/.agent-browser/<session>.sock (default session: default.sock). The daemon
+;; binds+listens on it and every CLI invocation connects to it. Without these
+;; allows the daemon aborts at startup with
+;; "Daemon error: Failed to bind socket: Operation not permitted".
+(allow network-bind network-inbound
+    (local unix-socket
+        (path-regex (string-append "^" HOME_DIR "/\\.agent-browser/[^/]+\\.sock$")))
+)
+(allow network-outbound
+    (remote unix-socket
+        (path-regex (string-append "^" HOME_DIR "/\\.agent-browser/[^/]+\\.sock$")))
+)

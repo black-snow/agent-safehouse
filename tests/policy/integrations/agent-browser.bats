@@ -15,6 +15,14 @@ load ../../test_helper.bash
   sft_assert_omits_source "$profile" "55-integrations-optional/shell-init.sb"
 }
 
+@test "[POLICY-ONLY] enable=agent-browser grants bind and connect for daemon sockets under ~/.agent-browser" {
+  local profile
+  profile="$(safehouse_profile --enable=agent-browser)"
+
+  sft_assert_contains "$profile" '/\\.agent-browser/[^/]+\\.sock$'
+  sft_assert_contains "$profile" 'network-bind network-inbound'
+}
+
 @test "[EXECUTION] enable=agent-browser lets the downloaded Chrome for Testing runtime launch when invoked indirectly" {
   local chrome_bin smoke_url expected_title
   local -a chrome_args

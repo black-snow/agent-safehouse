@@ -31,9 +31,9 @@
 ;;   55-integrations-optional/macos-gui.sb
 ;; This profile adds only app-specific MachPortRendezvousServer IPC grants.
 (allow mach-lookup
-    (global-name-regex #"^com\.anthropic\.claudefordesktop\.MachPortRendezvousServer\.")
+    (global-name-regex #"^(Q6L2SF6YDW\.)?com\.anthropic\.claudefordesktop\.MachPortRendezvousServer\.")
 )
 
 (allow mach-register
-    (global-name-regex #"^com\.anthropic\.claudefordesktop\.MachPortRendezvousServer\.")
+    (global-name-regex #"^(Q6L2SF6YDW\.)?com\.anthropic\.claudefordesktop\.MachPortRendezvousServer\.")
 )

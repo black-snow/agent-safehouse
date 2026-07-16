@@ -9,15 +9,20 @@
 ;;           55-integrations-optional/electron.sb     (GPU, Metal, crashpad, WebView; transitively pulls macos-gui)
 
 (allow file-read* file-write*
+    (home-subpath "/.codex")
     (home-subpath "/Library/Application Support/Codex")
+    (home-subpath "/Library/Caches/Codex")
     (home-subpath "/Library/Caches/com.openai.codex")
     (home-subpath "/Library/Logs/com.openai.codex")
     (home-subpath "/Library/HTTPStorages/com.openai.codex")
     (home-literal "/Library/HTTPStorages/com.openai.codex.binarycookies")
 )
 
+;; Newer builds install as ChatGPT.app (bundle ID still com.openai.codex).
+;; Older builds installed as Codex.app. Kept both for compatibility.
 (allow file-read*
     (subpath "/Applications/Codex.app")
+    (subpath "/Applications/ChatGPT.app")
     (home-literal "/Library/Preferences/com.openai.codex.plist")
 )
 
@@ -32,9 +37,23 @@
 (allow mach-lookup
     (global-name-regex #"^com\.openai\.codex\.MachPortRendezvousServer\.")
     (global-name-regex #"^com\.openai\.codex-spks")
+    (global-name-regex #"^com\.openai\.codex\.apps\.")
 )
 
 (allow mach-register
     (global-name-regex #"^com\.openai\.codex\.MachPortRendezvousServer\.")
     (global-name-regex #"^com\.openai\.codex-spks")
+    (global-name-regex #"^com\.openai\.codex\.apps\.")
+)
+
+;; Chromium's ProcessSingleton binds, listens, and connects to a UNIX socket.
+;; Without these allows launch aborts with error
+;; "Failed to create a ProcessSingleton for your profile directory".
+(allow network-bind network-inbound
+    (local unix-socket
+        (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/com\.openai\.codex\.[^/]+/SingletonSocket$"))
+)
+(allow network-outbound
+    (remote unix-socket
+        (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/com\.openai\.codex\.[^/]+/SingletonSocket$"))
 )

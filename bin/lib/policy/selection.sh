@@ -75,7 +75,8 @@ policy_selection_select_matching_app_bundle() {
     claude.app)
       policy_selection_append_scoped_profile "profiles/65-apps/claude-app.sb" "app bundle match: ${app_bundle_base}"
       ;;
-    codex.app)
+    # Newer builds install as ChatGPT.app. Older builds installed as Codex.app.
+    codex.app|chatgpt.app)
       policy_selection_append_scoped_profile "profiles/65-apps/codex-app.sb" "app bundle match: ${app_bundle_base}"
       ;;
     "visual studio code.app"|"visual studio code - insiders.app")

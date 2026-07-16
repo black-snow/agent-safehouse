@@ -123,6 +123,14 @@
     (home-subpath "/Library/Application Support/Chromium/Crashpad")
 )
 
+;; Chrome 151+ `--headless=new` creates an isolated
+;; "<default-user-data-dir>-headless" container and aborts at startup with
+;; "Failed to create headless user data directory container." if it cannot.
+(allow file-read* file-write*
+    (home-subpath "/Library/Application Support/Google/Chrome-headless")
+    (home-subpath "/Library/Application Support/Google/Chrome for Testing-headless")
+)
+
 ;; Chrome's ProcessSingleton binds, listens, and connects to a UNIX socket.
 ;; Without these allows, full-browser launch aborts at startup 
 ;; with error "Failed to bind() ... SingletonSocket".

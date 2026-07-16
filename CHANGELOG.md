@@ -10,6 +10,7 @@
 
 - `--enable=agent-browser` now unblocks UNIX sockets needed to run Agent Browser.
 - `--enable=chromium-full` now unblocks UNIX sockets needed to run Chromium. Chrome and Chrome for Testing were already unblocked.
+- `--enable=chromium-full` now unblocks the `-headless` user-data-dir container that Chrome 151+ creates for `--headless=new`, which previously aborted with "Failed to create headless user data directory container." This also fixes `--enable=agent-browser`, which launches Chrome for Testing headless by default.
 - `--enable=chromium-headless` now unblocks UNIX sockets, plists, and Crashpad needed to run Chrome,
   Chrome for Testing, and Chromium.
 - `--enable=docker` now re-opens the Podman UNIX sockets (the system socket and the per-machine sockets) it previously left blocked, so `docker`/`podman` clients pointed at a Podman unix socket can `connect()` instead of failing with `EPERM`. Previously only the Docker sockets were re-opened even though the core deny profile blocked both Docker and Podman.

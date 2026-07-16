@@ -22,6 +22,9 @@ load ../../test_helper.bash
   sft_assert_contains "$full_profile" '(global-name-regex #"^com\.google\.chrome\.for\.testing\.crashpad\.child_port_handshake\.")'
   sft_assert_contains "$headless_profile" 'file-read-xattr file-write-xattr'
   sft_assert_contains "$headless_profile" '(home-subpath "/Library/Application Support/Google/Chrome for Testing/Crashpad")'
+
+  sft_assert_contains "$headless_profile" '(home-subpath "/Library/Application Support/Google/Chrome-headless")'
+  sft_assert_contains "$headless_profile" '(home-subpath "/Library/Application Support/Google/Chrome for Testing-headless")'
 }
 
 @test "[EXECUTION] chromium-full can launch Google Chrome headless against example.com when Chrome is installed" {

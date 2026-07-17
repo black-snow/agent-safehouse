@@ -6,20 +6,54 @@
 
 - No special notes.
 
+### Changed Sandboxing Profiles
+
+- No profiles changed.
+
+## [0.11.1] - 2026-07-16
+
+### Upgrade Notes
+
+- No special notes.
+
 ### Bug Fixes
 
+- `--enable=1password` now unblocks the UNIX socket required for SSH-signing commits via `op-ssh-sign`.
 - `--enable=agent-browser` now unblocks UNIX sockets needed to run Agent Browser.
 - `--enable=chromium-full` now unblocks UNIX sockets needed to run Chromium. Chrome and Chrome for Testing were already unblocked.
 - `--enable=chromium-full` now unblocks the `-headless` user-data-dir container that Chrome 151+ creates for `--headless=new`, which previously aborted with "Failed to create headless user data directory container." This also fixes `--enable=agent-browser`, which launches Chrome for Testing headless by default.
 - `--enable=chromium-headless` now unblocks UNIX sockets, plists, and Crashpad needed to run Chrome,
   Chrome for Testing, and Chromium.
 - `--enable=docker` now re-opens the Podman UNIX sockets (the system socket and the per-machine sockets) it previously left blocked, so `docker`/`podman` clients pointed at a Podman unix socket can `connect()` instead of failing with `EPERM`. Previously only the Docker sockets were re-opened even though the core deny profile blocked both Docker and Podman.
-- `--enable=ssh` now unblocks the new location of the SSH_AUTH_SOCK socket on macOS Tahoe 26+.
+- `--enable=ssh` now unblocks the SSH_AUTH_SOCK socket on macOS Tahoe 26.4+. The pre-Tahoe location remains supported.
 - `--enable=vscode` now unblocks certain UNIX sockets needed to avoid opening multiple copies of the VS Code process.
+- The Claude desktop app's new Mach names are now granted by Safehouse.
+- The Codex desktop app is now recognized when installed as `ChatGPT.app`, which is how current builds ship. `Codex.app` remains supported. Safehouse also now grants additional filesystem paths, Mach names, and UNIX sockets so that Codex launches successfully.
+
+### Chores
+
+- macOS CI now runs a `macos-26` + `macos-15` matrix instead of `macos-latest`, so Tahoe- and Sequoia-specific policy differences such as the relocated SSH agent socket are caught before release rather than after.
+
+### Thanks
+
+- @d0ugal re-opening the Podman sockets under `--enable=docker`, including the test coverage that pins them against the identical strings in the deny block, in [#145](https://github.com/eugene1g/agent-safehouse/pull/145).
+- @jburnham reporting that `--enable=1password` could no longer reach the SSH agent socket after UNIX-socket connects became deny-by-default in [#139](https://github.com/eugene1g/agent-safehouse/issues/139).
+- @yngvark reporting that macOS Tahoe relocated `SSH_AUTH_SOCK` under `/var/run`, which `--enable=ssh` did not yet grant, in [#138](https://github.com/eugene1g/agent-safehouse/issues/138).
 
 ### Changed Sandboxing Profiles
 
-- [`docker.sb`](https://github.com/eugene1g/agent-safehouse/blob/main/profiles/55-integrations-optional/docker.sb): Re-opened the Podman sockets (system, and `~/.local/share/containers` / `~/.config/containers` machine sockets) for both file access and `network-outbound` connect, symmetric with the deny rules in `container-runtime-default-deny.sb`.
+- [`10-system-runtime.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-c27b7abd9dcf3cd976d593264e5d14dcfc2e10422b3dcdebb8bb9dbee4d611c8): Extended the default deny for launchd per-user listener sockets to the Tahoe 26.4+ `/private/var/run` location, naming `file-read-metadata` explicitly so the deny outranks the general `/private/var/run` metadata allow in the same profile.
+- [`container-runtime-default-deny.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-b26c73e82fe28da645a8216c4e2f81fc42121217d7c03fa2cf669f7686e290f2): Comment-only change clarifying that the `network-outbound` deny is defense-in-depth, since `20-network.sb` never allows UNIX sockets in the first place.
+- [`ssh-agent-default-deny.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-d5ee2399dc6de3abc866607371d90c0e6a0748d68ab1f31f1b327dc32dd6ea72): Added the Tahoe 26.4+ `/private/var/run` listener socket patterns so SSH agent access stays opt-in on that OS version.
+- [`1password.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-dae0a12c26e11eedc851247d601cccdd0445d3918b0ade4cdc869d3ffb23b585): Allowed `network-outbound` connect to the 1Password SSH agent socket, which was readable but not connectable.
+- [`agent-browser.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-51e021c04a1aa945867c71f383a570f1212b5011f7c23a4166781df6b58a0fe3): Allowed bind/listen/connect on the per-session daemon socket at `~/.agent-browser/<session>.sock`, which previously failed with "Failed to bind socket: Operation not permitted".
+- [`chromium-full.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-d542719401c3da098b9f40fa32c7f156af327e4ac8e980ef85b48d73fe7c2e82): Moved the ProcessSingleton and Crashpad grants down to `chromium-headless.sb` so all Chromium builds share them, and added the Chromium preferences plist.
+- [`chromium-headless.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-9f6dc8d781704105880e2f6841f5783b98bf8e483bc6454f3ca1b9560c3fcdc8): Added ProcessSingleton socket and Crashpad grants for Chrome, Chrome for Testing, and Chromium, plus the `-headless` user-data-dir container Chrome 151+ requires for `--headless=new`.
+- [`docker.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-2a99b527bf61c193bd84db192fc7c84224ff91cb9ecacede2c2672c45d2e5124): Re-opened the Podman sockets (system, and `~/.local/share/containers` / `~/.config/containers` machine sockets) for both file access and `network-outbound` connect, symmetric with the deny rules in `container-runtime-default-deny.sb`.
+- [`ssh.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-27e3f65a24bff6925a3e1e6fca94111fa57ca9cd73e662b4a78b1480804f097d): Allowed the Tahoe 26.4+ SSH_AUTH_SOCK location for both file access and connect, matching the specificity of the default deny so the allow wins.
+- [`claude-app.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-e3ba6b6dab397c0aa1f952d3488cffaa0119bb213d3e73fc3ca2ec39ec5f1ea7): Accepted the optional team-ID prefix on the app's MachPortRendezvousServer names.
+- [`codex-app.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-dfd037f71c747a82d9532750cd5ccfd3e79ffbcb83881c0acc599d6ef2072697): Covered the `ChatGPT.app` bundle alongside `Codex.app`, added `~/.codex` and `~/Library/Caches/Codex`, the `com.openai.codex.apps.*` Mach names, and the ProcessSingleton socket needed at launch.
+- [`vscode-app.sb`](https://github.com/eugene1g/agent-safehouse/compare/v0.11.0...v0.11.1#diff-e36692fe5535f876b390e4776cf042e90b6c47a6fe5370200f4013d0ead65cfb): Allowed the sandboxed instance to receive CLI IPC and to hand off args between Safehouse-managed instances, while explicitly denying outbound connects to an unsandboxed VS Code's IPC socket and to the `vscode-git` credential socket, which cross a trust boundary.
 
 ## [0.11.0] - 2026-07-07
 

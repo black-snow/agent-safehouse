@@ -33,16 +33,16 @@ load ../../test_helper.bash
 
   chrome_bin="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
   [ -x "$chrome_bin" ] || skip "Google Chrome is not installed"
-  # Bats runs with a fake HOME by default. Force Chrome to use its mock
-  # keychain backend so the test stays non-interactive and does not require
-  # real host keychain access.
+  
+  # --use-mock-keychain: Force Chrome to use its mock keychain backend so the
+  # test stays non-interactive and does not require real host keychain access.
   chrome_args=(--use-mock-keychain --no-sandbox --headless=new --dump-dom https://example.com)
 
-  "$chrome_bin" "${chrome_args[@]}" >/dev/null 2>&1 || skip "Google Chrome headless precheck failed outside sandbox"
+  HOME="$SAFEHOUSE_HOST_HOME" "$chrome_bin" "${chrome_args[@]}" >/dev/null 2>&1 || skip "Google Chrome headless precheck failed outside sandbox"
 
-  safehouse_denied -- "$chrome_bin" "${chrome_args[@]}"
+  HOME="$SAFEHOUSE_HOST_HOME" safehouse_denied -- "$chrome_bin" "${chrome_args[@]}"
 
-  run safehouse_ok --enable=chromium-full -- "$chrome_bin" "${chrome_args[@]}"
+  HOME="$SAFEHOUSE_HOST_HOME" run safehouse_ok --enable=chromium-full -- "$chrome_bin" "${chrome_args[@]}"
   [ "$status" -eq 0 ]
   sft_assert_contains "$output" "Example Domain"
 }

@@ -41,6 +41,7 @@ Enable only when required for the current task:
 - `chromium-headless`: headless Chromium / Playwright shell access. Chromium must still be launched with `--no-sandbox` inside Safehouse.
 - `chromium-full`: system Google Chrome and related full Chrome allowances. Chrome/Chromium must still be launched with `--no-sandbox` inside Safehouse.
 - `docker`: Docker socket and related access.
+- `herdr`: Auto-enabled when running an agent inside a [herdr](https://herdr.dev) pane, where `HERDR_ENV` is set, so that the agent can report status/bell state back to herdr.
 - `1password`: 1Password CLI/app integration paths.
 - `keychain`: macOS Keychain and `security`-tool access for credential-backed helper or plugin flows that need explicit opt-in.
 - `kubectl`: kube config/cache + krew state.

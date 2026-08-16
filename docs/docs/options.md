@@ -25,6 +25,7 @@
 - `agent-browser`
 - `clipboard`
 - `docker` (implies `keychain`)
+- `herdr`
 - `kubectl`
 - `keychain`
 - `macos-gui`

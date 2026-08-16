@@ -25,20 +25,26 @@ on:
       - ".github/workflows/e2e-agent-tui-macos.yml"
   workflow_dispatch:
 
+# Disallow all GITHUB_TOKEN permissions by default
+permissions: {}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   e2e-tui-macos:
+    name: E2E TUI Tests (macOS)
     runs-on: macos-latest
 
     steps:
       - name: Checkout branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - name: Cache npm download cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5
         with:
           path: ~/.npm
           key: e2e-npm-${{ runner.os }}-${{ hashFiles('.github/workflows/e2e-agent-tui-macos.yml') }}
@@ -78,7 +84,7 @@ jobs:
 
       - name: Upload agent TUI logs
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: agent-tui-logs
           path: artifacts/e2e

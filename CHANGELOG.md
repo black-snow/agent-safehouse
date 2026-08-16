@@ -4,7 +4,8 @@
 
 ### Upgrade Notes
 
-- No special notes.
+- Breaking: `--enable=1password` no longer grants file access to `~/.1password` or `/Users/Shared/.1password`. 
+    - 1Password itself never creates either directory on macOS.
 
 ### Features
 
@@ -19,6 +20,7 @@
 ### Changed Sandboxing Profiles
 
 - `10-system-runtime.sb`: Added read-only grants for `/nix/store`, `/nix/var/nix/profiles`, and Nix per-user profile pointer symlinks.
+- `1password.sb`: Removed the `~/.1password` and `/Users/Shared/.1password` file grants.
 
 ## [0.11.1] - 2026-07-16
 

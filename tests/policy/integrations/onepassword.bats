@@ -25,22 +25,17 @@ onepassword_run() {
   group_root="${fake_home}/Library/Group Containers/ABCD1234.com.1password"
   socket_file="${group_root}/t/agent.sock"
   settings_file="${group_root}/Library/Application Support/1Password/Data/settings/settings.json"
-  symlink_path="${fake_home}/.1password/agent.sock"
 
-  mkdir -p "$(dirname "$socket_file")" "$(dirname "$settings_file")" "$(dirname "$symlink_path")"
+  mkdir -p "$(dirname "$socket_file")" "$(dirname "$settings_file")"
   printf '%s\n' "socket" > "$socket_file"
   printf '%s\n' "{}" > "$settings_file"
-  /bin/ln -sf "$socket_file" "$symlink_path"
 
   HOME="$fake_home" safehouse_denied -- /usr/bin/stat "$socket_file"
 
   HOME="$fake_home" safehouse_denied -- /usr/bin/stat "$settings_file"
 
-  HOME="$fake_home" safehouse_denied -- /bin/ls "$symlink_path"
-
   HOME="$fake_home" safehouse_ok --enable=1password -- /usr/bin/stat "$socket_file" >/dev/null
   HOME="$fake_home" safehouse_ok --enable=1password -- /usr/bin/stat "$settings_file" >/dev/null
-  HOME="$fake_home" safehouse_ok --enable=1password -- /bin/ls "$symlink_path" >/dev/null
 }
 
 @test "[POLICY-ONLY] enable=1password allows network-outbound connect() to the SSH agent socket" { # https://github.com/eugene1g/agent-safehouse/issues/139

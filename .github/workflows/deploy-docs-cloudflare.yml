@@ -33,7 +33,13 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38  # v6
         with:
           node-version: 24
-          cache: pnpm
+
+          # NOTE: Unsafe to rely on possibly-poisoned cache within a workflow
+          #       that uses ${{ secrets.X }}, as flagged by zizmor.
+          #       If you really want to use a cache, consider splitting this
+          #       1 build+publish workflow into 2 separate build and publish workflows.
+          package-manager-cache: false
+          #cache: pnpm
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm run docs:build

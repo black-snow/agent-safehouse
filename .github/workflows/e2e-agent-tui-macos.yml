@@ -57,18 +57,39 @@ jobs:
       - name: Install TUI agent dependencies
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
+        # NOTE: ignore[adhoc-packages]: --min-release-age=N mitigates the ad-hoc
+        #       unlocked npm installs below
+        run: |  # zizmor: ignore[adhoc-packages]
           # fd/ripgrep are for pi: it downloads its own copies at first launch when they
           # are missing from PATH, which delays the TUI past the roundtrip timeout
-          brew install bats-core parallel tmux node aider block-goose-cli fd ripgrep
-          npm install --global --no-fund --no-audit \
+          # 1. Install Safehouse's own dependencies. (TODO: Consider pinning.)
+          # 2. Install latest unpinned versions of tools explicitly supported
+          #    as running inside a Safehouse sandbox
+          # NOTE: Does NOT use any kind of --min-release-age=N option
+          #       to reduce exposure to freshly-published supply chain
+          #       compromises because these formulae are all from homebrew-core
+          #       and thus are reviewed manually by a Homebrew maintainer
+          #       (not just the formula author) before publish.
+          brew install \
+            bats-core parallel \
+            aider block-goose-cli node tmux fd ripgrep
+          # NOTE: Uses --min-release-age=N to reduce exposure to
+          #       freshly-published supply chain compromises.
+          # NOTE: @sourcegraph/amp's version is pinned, unlike other packages here.
+          #       Bump the pin occasionally so it doesn't go too stale.
+          #      
+          #       All of amp's published versions are marked as prerelease but
+          #       --min-release-age=N only considers non-prerelease versions,
+          #       failing to find any valid version. An exact version pin
+          #       ignores prerelease-ness and succeeds.
+          npm install --global --no-fund --no-audit --min-release-age=4 \
             @anthropic-ai/claude-code \
             @earendil-works/pi-coding-agent \
             @github/copilot \
             @google/gemini-cli \
             @kilocode/cli \
             @openai/codex \
-            @sourcegraph/amp \
+            @sourcegraph/amp@0.0.1786054439-gd42f19 \
             cline \
             opencode-ai
 

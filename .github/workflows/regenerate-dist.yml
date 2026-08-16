@@ -11,8 +11,7 @@ on:
       - ".github/workflows/regenerate-dist.yml"
   workflow_dispatch:
 
-# Disallow all GITHUB_TOKEN permissions by default; grant contents: write
-# per-job below, only where it's needed to push the regenerated artifacts.
+# Disallow all GITHUB_TOKEN permissions by default
 permissions: {}
 
 concurrency:
@@ -23,17 +22,21 @@ jobs:
   regenerate-dist-artifacts:
     name: Regenerate Dist Artifacts
     runs-on: ubuntu-latest
-    # Needed to commit and push the regenerated dist artifacts back to the branch.
+    # Grant GitHub API write access, to commit/push the regenerated dist
+    # artifacts back to the branch.
     permissions:
       contents: write  # push regenerated dist artifacts
 
     steps:
       - name: Checkout branch
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        # NOTE: ignore[artipacked]: Persist GitHub API credentials so the
+        #       "Commit and push" step below can push
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6  # zizmor: ignore[artipacked]
         with:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
-          # Credentials must persist so the "Commit and push" step below can push.
+          # Persist GitHub API credentials so the
+          # "Commit and push" step below can push
           persist-credentials: true
 
       - name: Regenerate dist artifacts

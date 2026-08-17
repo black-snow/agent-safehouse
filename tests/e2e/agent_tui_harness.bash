@@ -4,6 +4,7 @@
 #   setup / teardown
 #   sft_tmux_start safehouse [safehouse-args ...] -- [ENV=VALUE ...] command [args...]
 #   sft_safehouse_run_capture output_file command [args...]
+#   sft_agent_tui_dismiss_gate gate_pattern [key ...]
 #   sft_tmux_assert_roundtrip
 
 SFT_AGENT_TUI_HELPER_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -34,6 +35,7 @@ sft_agent_tui_setup_test_env() {
   AGENT_TUI_RESPONSE_TIMEOUT_SECS="${SAFEHOUSE_AGENT_TUI_RESPONSE_TIMEOUT_SECS:-20}"
   AGENT_TUI_PROMPT_VISIBLE_TIMEOUT_SECS="${SAFEHOUSE_AGENT_TUI_PROMPT_VISIBLE_TIMEOUT_SECS:-5}"
   AGENT_TUI_POLL_INTERVAL_SECS="${SAFEHOUSE_AGENT_TUI_POLL_INTERVAL_SECS:-0.2}"
+  AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS="${SAFEHOUSE_AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS:-5}"
   AGENT_TUI_PRE_PROMPT_DELAY_SECS="${SAFEHOUSE_AGENT_TUI_PRE_PROMPT_DELAY_SECS:-0}"
   AGENT_TUI_SUBMIT_DELAY_SECS="${SAFEHOUSE_AGENT_TUI_SUBMIT_DELAY_SECS:-0.3}"
   AGENT_TUI_KEEP_SESSION="${SAFEHOUSE_AGENT_TUI_KEEP_SESSION:-0}"
@@ -466,6 +468,27 @@ sft_agent_tui_write_screen_capture() {
     printf '%s\n' "${capture_output}" >"${AGENT_TUI_SCREEN_PATH}"
   fi
   printf '%s\n' "${capture_output}"
+}
+
+# Dismiss one startup gate: send its keys (if any), then wait for the gate to
+# stop matching before letting the caller re-check the screen.
+sft_agent_tui_dismiss_gate() {
+  local gate_pattern="$1"
+
+  shift
+
+  if (( $# > 0 )); then
+    sft_tmux_send_keys "$@" || return 1
+  fi
+
+  # NOTE: A gate that never clears is not an error here. The caller will retry
+  #       a limited number of times.
+  sft_tmux_wait_until_regex_gone \
+    "${gate_pattern}" \
+    "${AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS:-5}" \
+    "${AGENT_TUI_POLL_INTERVAL_SECS:-0.2}" || true
+
+  return 0
 }
 
 sft_agent_tui_wait_for_prompt_visible() {

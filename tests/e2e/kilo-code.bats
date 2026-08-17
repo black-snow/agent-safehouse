@@ -106,13 +106,13 @@ handle_startup_gates() {
   fi
 
   if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}"; then
-    sft_tmux_send_keys Enter
+    sft_agent_tui_dismiss_gate "${trust_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
   if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}"; then
-    sft_tmux_send_keys Enter
+    sft_agent_tui_dismiss_gate "${permission_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi

@@ -45,8 +45,13 @@ jobs:
 
       - name: Deploy
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd  # v3
+        # NOTE: ignore[secrets-outside-env]: This workflow can only run with
+        #       maintainer-reviewed code on the main branch. Maintainer review
+        #       is considered sufficient protection against the merge of code
+        #       that tries to exfiltrate secrets. See discussion in:
+        #       https://github.com/eugene1g/agent-safehouse/issues/137
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}  # zizmor: ignore[secrets-outside-env]
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}  # zizmor: ignore[secrets-outside-env]
           wranglerVersion: "4.65.0"
           command: deploy --env production --var GIT_SHA:${{ github.sha }}

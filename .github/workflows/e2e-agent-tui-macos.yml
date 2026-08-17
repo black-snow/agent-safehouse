@@ -94,10 +94,15 @@ jobs:
             opencode-ai
 
       - name: Run agent TUI tests
+        # NOTE: ignore[secrets-outside-env]: This workflow can only run with
+        #       maintainer approval. Maintainer review of code pending merge
+        #       is considered sufficient protection against PR code
+        #       that tries to exfiltrate secrets. See discussion in:
+        #       https://github.com/eugene1g/agent-safehouse/issues/137
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}  # zizmor: ignore[secrets-outside-env]
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}  # zizmor: ignore[secrets-outside-env]
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # zizmor: ignore[secrets-outside-env]
           SAFEHOUSE_AGENT_TUI_STARTUP_WAIT_SECS: "20"
         run: |
           set -o pipefail

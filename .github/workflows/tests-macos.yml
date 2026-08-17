@@ -39,12 +39,16 @@ on:
       - ".github/workflows/regenerate-dist.yml"
   workflow_dispatch:
 
+# Disallow all GITHUB_TOKEN permissions by default
+permissions: {}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   test-macos:
+    name: Tests (macOS)
     strategy:
       fail-fast: false
       matrix:
@@ -58,14 +62,37 @@ jobs:
 
     steps:
       - name: Checkout branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - name: Install test and browser dependencies
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
-          brew install bats-core parallel node fnm
+        # NOTE: ignore[adhoc-packages]: --min-release-age=N mitigates the ad-hoc
+        #       unlocked npm installs below
+        run: |  # zizmor: ignore[adhoc-packages]
+          # 1. Install Safehouse's own dependencies. (TODO: Consider pinning.)
+          # 2. Install latest unpinned versions of tools explicitly supported
+          #    as running inside a Safehouse sandbox
+          # NOTE: Does NOT use any kind of --min-release-age=N option
+          #       to reduce exposure to freshly-published supply chain
+          #       compromises because these formulae are all from homebrew-core
+          #       and thus are reviewed manually by a Homebrew maintainer
+          #       (not just the formula author) before publish.
+          brew install \
+            bats-core parallel \
+            fnm node
+          # NOTE: --cask marks vendor-built items (not built by Homebrew).
+          #       Integrity checking varies: temurin is currently pinned;
+          #       google-chrome is currently unpinned.
           brew install --cask google-chrome temurin
+          # NOTE: Uses --min-release-age=N to reduce exposure to
+          #       freshly-published supply chain compromises.
+          npm install --global --no-fund --no-audit --min-release-age=4 \
+            agent-browser playwright
+
+          # Configure temurin
           shopt -s nullglob
           temurin_homes=(/Library/Java/JavaVirtualMachines/temurin*.jdk/Contents/Home)
           shopt -u nullglob
@@ -75,7 +102,7 @@ jobs:
           fi
           printf 'JAVA_HOME=%s\n' "${temurin_homes[0]}" >> "${GITHUB_ENV}"
           printf '%s\n' "${temurin_homes[0]}/bin" >> "${GITHUB_PATH}"
-          npm install --global --no-fund --no-audit agent-browser playwright
+
           agent-browser install
           playwright install chromium-headless-shell
 

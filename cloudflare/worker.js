@@ -25,6 +25,9 @@ export default {
     }
 
     // For non-API routes, delegate to static assets.
+    // TODO: Serve an HTTP 404 instead. This code should be unreachable
+    //       because wrangler.toml should have served a static asset for any
+    //       non-/api/* route.
     return env.ASSETS.fetch(request);
   },
 };

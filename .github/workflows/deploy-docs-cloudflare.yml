@@ -10,7 +10,6 @@ on:
       - 'pnpm-lock.yaml'
       - 'wrangler.toml'
       - '.github/workflows/deploy-docs-cloudflare.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read

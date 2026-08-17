@@ -16,9 +16,10 @@ load agent_tui_harness.bash
   local trust_gate_pattern=""
   local permission_gate_pattern=""
   local restart_gate_pattern=""
-  # cline overlays a "Try ClinePass" subscription promo on the input line at startup;
-  # it closes on any key other than Enter (Enter opens the signup URL in a browser)
+  # cline overlays a "Try ClinePass" subscription promo on the input line at startup.
+  # It closes on any key other than Enter (Enter opens the signup URL in a browser).
   local promo_gate_pattern='Try ClinePass|any other key to close'
+  local promo_settle_secs="${SAFEHOUSE_AGENT_TUI_CLINE_PROMO_SETTLE_SECS:-1.5}"
   local model="gpt-5.6-luna"
 
   prepare_agent_state "${agent_home}" "${config_dir}"
@@ -29,7 +30,17 @@ load agent_tui_harness.bash
     safehouse -- \
     "HOME=${agent_home}" \
     cline --config "${config_dir}" --model "${model}" -a -y
-  handle_startup_gates 1
+
+  # Wait for input ready. Sequence:
+  # 1. ${input_ready_pattern} observed. Input IGNORED (if promo coming).
+  # 2. About 300-400ms pass.
+  #    ${promo_gate_pattern} observed.
+  # 3. Press Escape.
+  #    ${input_ready_pattern} observed. Input accepted.
+  handle_startup_gates 1  # wait for first ${input_ready_pattern}
+  sleep "${promo_settle_secs}"  # wait for promo to display (if there is one)
+  handle_startup_gates 1  # dismiss promo (if there is one); wait for last ${input_ready_pattern}
+
   sft_tmux_assert_roundtrip
 }
 

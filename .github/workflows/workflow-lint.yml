@@ -1,0 +1,39 @@
+name: Workflow Lint
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+# Disallow all GITHUB_TOKEN permissions by default
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
+
+      # NOTE: Runs offline (no GH_TOKEN) since we don't need zizmor's
+      #       online-only audits, which mainly detect stale action-pin
+      #       comments (e.g. "# v6" no longer matching the pinned SHA).
+      - name: Run zizmor (auditor persona)
+        run: uvx "zizmor@1.29.0" --persona auditor .github/workflows/

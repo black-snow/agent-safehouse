@@ -37,6 +37,8 @@ load agent_tui_harness.bash
 
   fake_agent_code=$'import sys, termios, tty\nfd = sys.stdin.fileno()\nold = termios.tcgetattr(fd)\nbuf = []\nprint("Ready", flush=True)\ntry:\n    tty.setcbreak(fd)\n    while True:\n        ch = sys.stdin.read(1)\n        if not ch:\n            break\n        if ch in "\\r\\n":\n            print("* " + "".join(buf).replace("?", ""), flush=True)\n            print("London", flush=True)\n            break\n        buf.append(ch)\n        print("* " + "".join(buf).replace("?", ""), flush=True)\n        sys.stdout.flush()\nfinally:\n    termios.tcsetattr(fd, termios.TCSADRAIN, old)\n'
 
+  # NOTE: Intentionally contains a '?', which some compositors (like Codex) drop.
+  AGENT_TUI_PROMPT_TEXT="What is the capital of England? Reply with only the city name."
   AGENT_TUI_PROMPT_VISIBLE_MODE="regex"
   AGENT_TUI_PROMPT_VISIBLE_REGEX='What is the capital of England\?? Reply with only the city name\.'
   AGENT_TUI_SUBMIT_DELAY_SECS=0
@@ -51,10 +53,10 @@ load agent_tui_harness.bash
 
   sft_require_cmd_or_skip "python3"
 
-  fake_agent_code=$'import sys, termios, tty\nfd = sys.stdin.fileno()\nold = termios.tcgetattr(fd)\nbuf = []\nprint("Ready", flush=True)\nprint("Normal screen filler " * 12, flush=True)\ntry:\n    tty.setcbreak(fd)\n    while True:\n        ch = sys.stdin.read(1)\n        if not ch:\n            break\n        if ch in "\\r\\n":\n            sys.stdout.write("\\x1b[?1049h\\x1b[2J\\x1b[H")\n            print("* " + "".join(buf).replace("?", ""), flush=True)\n            print("London", flush=True)\n            break\n        buf.append(ch)\n        sys.stdout.write("\\x1b[?1049h\\x1b[2J\\x1b[H")\n        print("* " + "".join(buf).replace("?", ""), flush=True)\n        sys.stdout.flush()\nfinally:\n    termios.tcsetattr(fd, termios.TCSADRAIN, old)\n'
+  fake_agent_code=$'import sys, termios, tty\nfd = sys.stdin.fileno()\nold = termios.tcgetattr(fd)\nbuf = []\nprint("Ready", flush=True)\nprint("Normal screen filler " * 12, flush=True)\ntry:\n    tty.setcbreak(fd)\n    while True:\n        ch = sys.stdin.read(1)\n        if not ch:\n            break\n        if ch in "\\r\\n":\n            sys.stdout.write("\\x1b[?1049h\\x1b[2J\\x1b[H")\n            print("* " + "".join(buf), flush=True)\n            print("London", flush=True)\n            break\n        buf.append(ch)\n        sys.stdout.write("\\x1b[?1049h\\x1b[2J\\x1b[H")\n        print("* " + "".join(buf), flush=True)\n        sys.stdout.flush()\nfinally:\n    termios.tcsetattr(fd, termios.TCSADRAIN, old)\n'
 
   AGENT_TUI_PROMPT_VISIBLE_MODE="regex"
-  AGENT_TUI_PROMPT_VISIBLE_REGEX='What is the capital of England\?? Reply with only the city name\.'
+  AGENT_TUI_PROMPT_VISIBLE_REGEX='Name the capital city of England\. Reply with only the city name\.'
   AGENT_TUI_SUBMIT_DELAY_SECS=0
 
   sft_tmux_start_session python3 -u -c "${fake_agent_code}"
@@ -115,7 +117,7 @@ load agent_tui_harness.bash
   AGENT_TUI_PROMPT_SEND_MODE="slow"
   AGENT_TUI_PROMPT_CHAR_DELAY_SECS=0
   AGENT_TUI_PROMPT_VISIBLE_MODE="regex"
-  AGENT_TUI_PROMPT_VISIBLE_REGEX='What is the capital of England\?? Reply with only the city name\.'
+  AGENT_TUI_PROMPT_VISIBLE_REGEX='Name the capital city of England\. Reply with only the city name\.'
   AGENT_TUI_SUBMIT_DELAY_SECS=0
 
   sft_tmux_start_session python3 -u -c "${fake_agent_code}"

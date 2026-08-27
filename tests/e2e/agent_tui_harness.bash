@@ -44,7 +44,9 @@ sft_agent_tui_setup_test_env() {
   AGENT_TUI_PROMPT_SEND_MODE="${SAFEHOUSE_AGENT_TUI_PROMPT_SEND_MODE:-bulk}"
   AGENT_TUI_PROMPT_CHAR_DELAY_SECS="${SAFEHOUSE_AGENT_TUI_PROMPT_CHAR_DELAY_SECS:-0.03}"
   AGENT_TUI_SUBMIT_KEYS=(Enter)
-  AGENT_TUI_PROMPT_TEXT="What is the capital of England? Reply with only the city name."
+  # NOTE: Avoid '?' in the prompt.
+  #       Codex 0.149.0 echoes any such prompt back with the '?' missing.
+  AGENT_TUI_PROMPT_TEXT="Name the capital city of England. Reply with only the city name."
   AGENT_TUI_PROMPT_VISIBLE_MODE="literal"
   AGENT_TUI_PROMPT_VISIBLE_TEXT="${AGENT_TUI_PROMPT_TEXT}"
   AGENT_TUI_PROMPT_VISIBLE_REGEX=""

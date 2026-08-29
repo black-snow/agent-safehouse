@@ -3,6 +3,7 @@
 # Low-level tmux API
 #   sft_tmux_start_session command [args...]
 #   sft_tmux_capture
+#   sft_tmux_capture_full
 #   sft_tmux_send_text text
 #   sft_tmux_send_text_slow text [char_delay_secs]
 #   sft_tmux_send_keys key [key ...]
@@ -10,7 +11,7 @@
 #   sft_tmux_wait_until_regex pattern [timeout_secs] [poll_secs]
 #   sft_tmux_wait_until_regex_gone pattern [timeout_secs] [poll_secs]
 #   sft_tmux_wait_until_compact_text text [timeout_secs] [poll_secs]
-#   sft_tmux_matches_regex pattern
+#   sft_tmux_matches_regex pattern [normal_output alt_output]
 #   sft_tmux_type_and_wait_visible text [timeout_secs] [poll_secs]
 #   sft_tmux_stop
 #   sft_tmux_cleanup
@@ -23,6 +24,9 @@ if [[ -z "${SFT_TMUX_HELPER_LOADED:-}" ]]; then
   SFT_TMUX_CURRENT_SESSION=""
   SFT_TMUX_CURRENT_WORKDIR=""
   SFT_TMUX_SERVER_NAME="safehouse-tmux-$$-$RANDOM"
+  # The most recent screen capture, as (normal_output alt_output).
+  # Published by sft_tmux_capture_full.
+  SFT_TMUX_LAST_CAPTURE=("" "")
 fi
 
 sft_tmux() {
@@ -43,14 +47,27 @@ sft_tmux_shell_join() {
   done
 }
 
+# Capture and return the normal screen buffer.
 sft_tmux_capture_normal() {
   sft_tmux_require_current_session || return 1
   sft_tmux capture-pane -p -J -N -t "${SFT_TMUX_CURRENT_SESSION}" 2>/dev/null || true
 }
 
+# Capture and return the alt screen buffer.
 sft_tmux_capture_alternate() {
   sft_tmux_require_current_session || return 1
   sft_tmux capture-pane -a -p -J -N -t "${SFT_TMUX_CURRENT_SESSION}" 2>/dev/null || true
+}
+
+# Capture normal+alt screen buffers and publish them to SFT_TMUX_LAST_CAPTURE.
+# Do not call in a subshell because the assignment would be discarded.
+sft_tmux_capture_full() {
+  SFT_TMUX_LAST_CAPTURE=("" "")
+  sft_tmux_require_current_session || return 1
+
+  local normal_output="$(sft_tmux_capture_normal 2>/dev/null || true)"
+  local alt_output="$(sft_tmux_capture_alternate 2>/dev/null || true)"
+  SFT_TMUX_LAST_CAPTURE=("${normal_output}" "${alt_output}")
 }
 
 sft_tmux_capture_score() {
@@ -212,15 +229,10 @@ sft_tmux_start_session() {
   sft_tmux_run "$@"
 }
 
+# Updates SFT_TMUX_LAST_CAPTURE, except when run in subshell.
 sft_tmux_capture() {
-  local normal_output=""
-  local alt_output=""
-
-  sft_tmux_require_current_session || return 1
-
-  normal_output="$(sft_tmux_capture_normal 2>/dev/null || true)"
-  alt_output="$(sft_tmux_capture_alternate 2>/dev/null || true)"
-  sft_tmux_select_capture "${normal_output}" "${alt_output}"
+  sft_tmux_capture_full || return 1
+  sft_tmux_select_capture "${SFT_TMUX_LAST_CAPTURE[@]}"
 }
 
 sft_tmux_send_text() {
@@ -276,6 +288,7 @@ sft_tmux_current_pane_dead() {
   [[ "$(sft_tmux display-message -p -t "${SFT_TMUX_CURRENT_SESSION}" '#{pane_dead}' 2>/dev/null || printf '1')" == "1" ]]
 }
 
+# Updates SFT_TMUX_LAST_CAPTURE, except when run in subshell.
 _sft_tmux_wait_until_grep() {
   local timeout_secs="${1:-20}"
   local poll_secs="${2:-0.2}"
@@ -292,8 +305,9 @@ _sft_tmux_wait_until_grep() {
   deadline="$(( $(date +%s) + timeout_secs ))"
 
   while true; do
-    normal_output="$(sft_tmux_capture_normal 2>/dev/null || true)"
-    alt_output="$(sft_tmux_capture_alternate 2>/dev/null || true)"
+    sft_tmux_capture_full || return 1
+    normal_output="${SFT_TMUX_LAST_CAPTURE[0]}"
+    alt_output="${SFT_TMUX_LAST_CAPTURE[1]}"
 
     if sft_tmux_outputs_match_grep "${normal_output}" "${alt_output}" "${grep_args[@]}"; then
       return 0
@@ -315,6 +329,7 @@ _sft_tmux_wait_until_grep() {
   done
 }
 
+# Updates SFT_TMUX_LAST_CAPTURE, except when run in subshell.
 sft_tmux_wait_until() {
   local needle="${1:-}"
   local timeout_secs="${2:-10}"
@@ -328,6 +343,7 @@ sft_tmux_wait_until() {
   _sft_tmux_wait_until_grep "${timeout_secs}" "${poll_secs}" "text" -Fq -- "${needle}"
 }
 
+# Updates SFT_TMUX_LAST_CAPTURE, except when run in subshell.
 sft_tmux_wait_until_regex() {
   local pattern="${1:-}"
   local timeout_secs="${2:-20}"
@@ -389,8 +405,9 @@ sft_tmux_wait_until_compact_text() {
   deadline="$(( $(date +%s) + timeout_secs ))"
 
   while true; do
-    normal_output="$(sft_tmux_capture_normal 2>/dev/null || true)"
-    alt_output="$(sft_tmux_capture_alternate 2>/dev/null || true)"
+    sft_tmux_capture_full || return 1
+    normal_output="${SFT_TMUX_LAST_CAPTURE[0]}"
+    alt_output="${SFT_TMUX_LAST_CAPTURE[1]}"
 
     if sft_tmux_outputs_match_compact_text "${normal_output}" "${alt_output}" "${compact_needle}"; then
       return 0
@@ -412,18 +429,33 @@ sft_tmux_wait_until_compact_text() {
   done
 }
 
+# Match against the live screen, or against a frame the caller froze earlier.
 sft_tmux_matches_regex() {
   local pattern="${1:-}"
   local normal_output=""
   local alt_output=""
 
   [[ -n "${pattern}" ]] || {
-    printf 'usage: sft_tmux_matches_regex pattern\n' >&2
+    printf 'usage: sft_tmux_matches_regex pattern [normal_output alt_output]\n' >&2
     return 1
   }
 
-  normal_output="$(sft_tmux_capture_normal 2>/dev/null || true)"
-  alt_output="$(sft_tmux_capture_alternate 2>/dev/null || true)"
+  case "$#" in
+    1)
+      sft_tmux_capture_full || return 1
+      normal_output="${SFT_TMUX_LAST_CAPTURE[0]}"
+      alt_output="${SFT_TMUX_LAST_CAPTURE[1]}"
+      ;;
+    3)
+      normal_output="$2"
+      alt_output="$3"
+      ;;
+    *)
+      printf 'usage: sft_tmux_matches_regex pattern [normal_output alt_output]\n' >&2
+      return 1
+      ;;
+  esac
+
   sft_tmux_outputs_match_grep "${normal_output}" "${alt_output}" -Eq -- "${pattern}"
 }
 

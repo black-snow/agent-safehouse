@@ -124,3 +124,66 @@ load agent_tui_harness.bash
   sft_tmux_wait_until "Ready" 2 0.1
   sft_tmux_assert_roundtrip
 }
+
+@test "[E2E-TUI] a frozen capture keeps judging the frame it was taken from" {
+  local fake_agent_code=""
+  local -a frame=()
+
+  sft_require_cmd_or_skip "python3"
+
+  # Paints gate 1, waits for a key, then paints gate 2
+  fake_agent_code=$'import sys, termios, tty, time\nfd = sys.stdin.fileno()\nold = termios.tcgetattr(fd)\nprint("GATE ONE", flush=True)\ntry:\n    tty.setcbreak(fd)\n    sys.stdin.read(1)\n    sys.stdout.write("\\x1b[2J\\x1b[H")\n    print("GATE TWO", flush=True)\nfinally:\n    termios.tcsetattr(fd, termios.TCSADRAIN, old)\ntime.sleep(5)\n'
+
+  # Capture frame of gate 1
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+  sft_tmux_wait_until_regex 'GATE ONE' 2 0.1
+  frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
+
+  # Wait until live screen shows gate 2
+  sft_tmux_send_keys Enter
+  sft_tmux_wait_until_regex 'GATE TWO' 2 0.1
+
+  # Ensure sft_tmux_matches_regex uses a frame that is provided
+  run sft_tmux_matches_regex 'GATE ONE' "${frame[@]}"
+  [ "${status}" -eq 0 ]
+  run sft_tmux_matches_regex 'GATE TWO' "${frame[@]}"
+  [ "${status}" -ne 0 ]
+
+  # Ensure sft_tmux_matches_regex uses the live screen if no frame provided
+  run sft_tmux_matches_regex 'GATE ONE'
+  [ "${status}" -ne 0 ]
+  run sft_tmux_matches_regex 'GATE TWO'
+  [ "${status}" -eq 0 ]
+}
+
+@test "[E2E-TUI] a failure dump reports the judged frame and also the live one" {
+  local fake_agent_code=""
+  local -a frame=()
+
+  sft_require_cmd_or_skip "python3"
+
+  # Paints gate 1, waits for a key, then paints gate 2
+  fake_agent_code=$'import sys, termios, tty, time\nfd = sys.stdin.fileno()\nold = termios.tcgetattr(fd)\nprint("GATE ONE", flush=True)\ntry:\n    tty.setcbreak(fd)\n    sys.stdin.read(1)\n    sys.stdout.write("\\x1b[2J\\x1b[H")\n    print("GATE TWO", flush=True)\nfinally:\n    termios.tcsetattr(fd, termios.TCSADRAIN, old)\ntime.sleep(5)\n'
+
+  # Capture frame of gate 1
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+  sft_tmux_wait_until_regex 'GATE ONE' 2 0.1
+  frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
+
+  # Wait until live screen shows gate 2
+  sft_tmux_send_keys Enter
+  sft_tmux_wait_until_regex 'GATE TWO' 2 0.1
+
+  run sft_agent_tui_write_screen_capture "${frame[@]}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"decision frame"* ]]
+  [[ "${output}" == *"GATE ONE"* ]]
+  [[ "${output}" == *"current frame ("*"buffer"*")"* ]]
+  [[ "${output}" == *"GATE TWO"* ]]
+
+  # A screen that has not moved gets one section, not two.
+  run sft_agent_tui_write_screen_capture "${SFT_TMUX_LAST_CAPTURE[@]}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"decision frame"* ]]
+  [[ "${output}" != *"current frame"* ]]
+}

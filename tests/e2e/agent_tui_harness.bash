@@ -5,6 +5,7 @@
 #   sft_tmux_start safehouse [safehouse-args ...] -- [ENV=VALUE ...] command [args...]
 #   sft_safehouse_run_capture output_file command [args...]
 #   sft_agent_tui_dismiss_gate gate_pattern [key ...]
+#   sft_agent_tui_write_screen_capture [normal_output alt_output]
 #   sft_tmux_assert_roundtrip
 
 SFT_AGENT_TUI_HELPER_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -469,14 +470,69 @@ sft_safehouse_run_capture() {
   return "${status}"
 }
 
+# Dump the screen for a failure report.
+#
+# Given the frame the caller actually judged, print that frame first and then
+# the live screen when it has moved on. Reporting a failure with a fresh
+# capture alone is misleading: the screen keeps painting after the decision, so
+# the dump can show a state that would have been handled. Diagnosing a
+# get-set race needs both halves of the story.
 sft_agent_tui_write_screen_capture() {
-  local capture_output=""
+  local -a decision_frame=()
+  local frame_change=""
+  local report=""
 
-  capture_output="$(sft_tmux_capture 2>/dev/null || true)"
-  if [[ -n "${AGENT_TUI_SCREEN_PATH:-}" ]]; then
-    printf '%s\n' "${capture_output}" >"${AGENT_TUI_SCREEN_PATH}"
+  case "$#" in
+    0) ;;
+    2) decision_frame=("$1" "$2") ;;
+    *)
+      printf 'usage: sft_agent_tui_write_screen_capture [normal_output alt_output]\n' >&2
+      return 1
+      ;;
+  esac
+
+  sft_tmux_capture_full 2>/dev/null || true
+
+  if (( ${#decision_frame[@]} == 2 )); then
+    report="--- decision frame ---"$'\n'
+    report="${report}$(sft_tmux_select_capture "${decision_frame[0]}" "${decision_frame[1]}")"$'\n'
+
+    frame_change="$(sft_agent_tui_describe_frame_change \
+      "${decision_frame[0]}" "${decision_frame[1]}" \
+      "${SFT_TMUX_LAST_CAPTURE[0]}" "${SFT_TMUX_LAST_CAPTURE[1]}")"
+
+    if [[ -n "${frame_change}" ]]; then
+      report="${report}--- current frame (${frame_change}) ---"$'\n'
+      report="${report}$(sft_tmux_select_capture "${SFT_TMUX_LAST_CAPTURE[@]}")"$'\n'
+    fi
+  else
+    report="--- current frame (no decision frame) ---"$'\n'
+    report="${report}$(sft_tmux_select_capture "${SFT_TMUX_LAST_CAPTURE[@]}")"$'\n'
   fi
-  printf '%s\n' "${capture_output}"
+
+  if [[ -n "${AGENT_TUI_SCREEN_PATH:-}" ]]; then
+    printf '%s' "${report}" >"${AGENT_TUI_SCREEN_PATH}"
+  fi
+  printf '%s' "${report}"
+}
+
+# Name the buffers that moved between two frames,
+# or print nothing if neither did.
+sft_agent_tui_describe_frame_change() {
+  local before_normal="${1:-}"
+  local before_alt="${2:-}"
+  local after_normal="${3:-}"
+  local after_alt="${4:-}"
+  local -a moved=()
+
+  [[ "${before_normal}" == "${after_normal}" ]] || moved+=("normal")
+  [[ "${before_alt}" == "${after_alt}" ]] || moved+=("alternate")
+
+  case "${#moved[@]}" in
+    0) return 0 ;;
+    1) printf '%s buffer differs\n' "${moved[0]}" ;;
+    *) printf 'normal + alternate buffers differ\n' ;;
+  esac
 }
 
 # Dismiss one startup gate: send its keys (if any), then wait for the gate to

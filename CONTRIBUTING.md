@@ -63,6 +63,7 @@ type -a safehouse
 - Keep policy changes least-privilege; avoid broad grants unless needed.
 - Preserve stage ordering semantics. Later rules win.
 - Keep each `.sb` module standalone for its capability.
+- Target Bash 3.2 in `bin/`, `scripts/`, and `tests/`, which is the version that macOS ships.
 
 ## Contribution Philosophy (Security + DX)
 

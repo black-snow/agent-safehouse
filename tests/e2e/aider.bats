@@ -14,11 +14,9 @@ load agent_tui_harness.bash
   local auth_log_path="${AGENT_TUI_ROOT}/aider-login.log"
   local input_history_path="${config_dir}/.aider.input.history"
   local chat_history_path="${config_dir}/.aider.chat.history.md"
-  local input_ready_pattern='ask>'
-  local trust_gate_pattern=""
-  local permission_gate_pattern=""
-  local restart_gate_pattern=""
   local model="gpt-5.6-luna"
+
+  AGENT_TUI_READY_PATTERN='ask>'
 
   prepare_agent_state "${agent_home}" "${config_dir}" "${input_history_path}" "${chat_history_path}"
   login_agent "${config_dir}" "${auth_log_path}" "${model}"
@@ -40,7 +38,7 @@ load agent_tui_harness.bash
       --no-browser \
       --input-history-file "${input_history_path}" \
       --chat-history-file "${chat_history_path}"
-  handle_startup_gates 1
+  sft_agent_tui_handle_startup_gates
   sft_tmux_assert_roundtrip
 }
 
@@ -69,64 +67,4 @@ configure_agent_tui() {
   fi
 
   return 0
-}
-
-handle_startup_gates() {
-  local pass="${1:-1}"
-  local combined_pattern="${input_ready_pattern}"
-  local gate_pattern=""
-  local -a gate_patterns=(
-    "${trust_gate_pattern:-}"
-    "${permission_gate_pattern:-}"
-    "${restart_gate_pattern:-}"
-  )
-
-  (( pass <= 5 )) || {
-    AGENT_TUI_FAILED=1
-    printf 'too many startup gate passes\n' >&2
-    sft_agent_tui_write_screen_capture >&2 || true
-    return 1
-  }
-
-  for gate_pattern in "${gate_patterns[@]}"; do
-    [[ -n "${gate_pattern}" ]] || continue
-    combined_pattern="${combined_pattern}|${gate_pattern}"
-  done
-
-  sft_tmux_wait_until_regex \
-    "${combined_pattern}" \
-    "${AGENT_TUI_STARTUP_WAIT_SECS}" \
-    "${AGENT_TUI_POLL_INTERVAL_SECS}" || {
-      AGENT_TUI_FAILED=1
-      sft_agent_tui_write_screen_capture >&2 || true
-      return 1
-    }
-  local -a frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
-
-  if sft_tmux_matches_regex "${input_ready_pattern}" "${frame[@]}"; then
-    return 0
-  fi
-
-  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${trust_gate_pattern}" Enter
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${permission_gate_pattern}" Enter
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${restart_gate_pattern}"
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  AGENT_TUI_FAILED=1
-  printf 'unhandled startup gate\n' >&2
-  sft_agent_tui_write_screen_capture "${frame[@]}" >&2 || true
-  return 1
 }

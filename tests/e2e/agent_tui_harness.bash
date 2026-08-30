@@ -4,18 +4,14 @@
 #   setup / teardown
 #   sft_tmux_start safehouse [safehouse-args ...] -- [ENV=VALUE ...] command [args...]
 #   sft_safehouse_run_capture output_file command [args...]
+#   sft_agent_tui_add_gate [--before-ready] [--once] pattern [key ...]
+#   sft_agent_tui_add_skip_gate pattern reason
+#   sft_agent_tui_handle_startup_gates
 #   sft_agent_tui_dismiss_gate gate_pattern [key ...]
 #   sft_agent_tui_write_screen_capture [normal_output alt_output]
 #   sft_tmux_assert_roundtrip
 
 SFT_AGENT_TUI_HELPER_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-
-# Status a startup-gate handler returns to ask its caller to skip the test
-# rather than fail it: the screen showed something that means "this agent is
-# not testable here", not a gate to dismiss. Deliberately far from the 0/1
-# range the gate handlers and tmux helpers use for ready/failed, so a stray
-# nonzero status from some other command is never mistaken for it.
-SFT_AGENT_TUI_GATE_SKIP=111
 
 setup() {
   sft_setup_test_env
@@ -60,6 +56,8 @@ sft_agent_tui_setup_test_env() {
   AGENT_TUI_PROMPT_VISIBLE_TEXT="${AGENT_TUI_PROMPT_TEXT}"
   AGENT_TUI_PROMPT_VISIBLE_REGEX=""
   AGENT_TUI_EXPECTED_TOKEN="London"
+
+  sft_agent_tui_reset_gates
 
   mkdir -p "${AGENT_TUI_WORKDIR}"
   AGENT_TUI_WORKDIR="$(cd -- "${AGENT_TUI_WORKDIR}" && pwd -P)"
@@ -588,6 +586,184 @@ sft_agent_tui_dismiss_gate() {
     "${AGENT_TUI_POLL_INTERVAL_SECS:-0.2}" || true
 
   return 0
+}
+
+# Startup gate registry
+#
+# A gate is something an agent TUI paints before it is ready for input: a trust
+# prompt, an auth picker, a promo overlay. Tests register the gates their agent
+# is known to show, then call sft_agent_tui_handle_startup_gates to answer them.
+sft_agent_tui_reset_gates() {
+  AGENT_TUI_READY_PATTERN=""
+  AGENT_TUI_GATE_PATTERNS=()
+  AGENT_TUI_GATE_KEYS=()
+  AGENT_TUI_GATE_FLAGS=()
+  AGENT_TUI_GATE_REASONS=()
+}
+
+# sft_agent_tui_add_gate [--before-ready] [--once] pattern [key1 key2 ...]
+# 
+# Gates are checked in registration order, with --before-ready ones before the
+# AGENT_TUI_READY_PATTERN check and others after it.
+#
+# Parameters:
+# * --once: Retires the gate after it is answered,
+#   for a gate that must not be answered twice.
+# * keys: tmux key names sent to dismiss the gate.
+#   A gate registered with no keys is simply waited out.
+sft_agent_tui_add_gate() {
+  local flags=""
+  local pattern=""
+
+  while (( $# > 0 )); do
+    case "$1" in
+      --before-ready) flags="${flags} before-ready" ;;
+      --once) flags="${flags} once" ;;
+      --) shift; break ;;
+      -*)
+        printf 'sft_agent_tui_add_gate: unknown option: %s\n' "$1" >&2
+        return 1
+        ;;
+      *) break ;;
+    esac
+    shift
+  done
+
+  pattern="${1:-}"
+  [[ -n "${pattern}" ]] || {
+    printf 'usage: sft_agent_tui_add_gate [--before-ready] [--once] pattern [key1 key2 ...]\n' >&2
+    return 1
+  }
+  shift
+
+  AGENT_TUI_GATE_PATTERNS+=("${pattern}")
+  AGENT_TUI_GATE_KEYS+=("$*")
+  AGENT_TUI_GATE_FLAGS+=("${flags}")
+  AGENT_TUI_GATE_REASONS+=("")
+}
+
+# sft_agent_tui_add_skip_gate pattern reason
+# 
+# Adds a pseudo-gate that when matched skips the current test with the
+# specified reason. Always is a --before-ready gate, checked before the
+# AGENT_TUI_READY_PATTERN check.
+sft_agent_tui_add_skip_gate() {
+  local pattern="${1:-}"
+  local reason="${2:-}"
+
+  [[ -n "${pattern}" && -n "${reason}" ]] || {
+    printf 'usage: sft_agent_tui_add_skip_gate pattern reason\n' >&2
+    return 1
+  }
+
+  AGENT_TUI_GATE_PATTERNS+=("${pattern}")
+  AGENT_TUI_GATE_KEYS+=("")
+  AGENT_TUI_GATE_FLAGS+=("before-ready skip")
+  AGENT_TUI_GATE_REASONS+=("${reason}")
+}
+
+# Answer startup gates until the agent is ready for input.
+# 
+# Note that if a "skip gate" was registered with sft_agent_tui_add_skip_gate,
+# this function may skip the current test rather than returning. 
+sft_agent_tui_handle_startup_gates() {
+  local max_passes="${AGENT_TUI_GATE_MAX_PASSES:-5}"
+  local gate_count="${#AGENT_TUI_GATE_PATTERNS[@]}"
+  local combined_pattern=""
+  local phase=""
+  local flags=""
+  local pass=0
+  local i=0
+  local matched=-1
+  local -a frame=()
+  local -a keys=()
+  local -a retired=()
+
+  [[ -n "${AGENT_TUI_READY_PATTERN:-}" ]] || {
+    printf 'sft_agent_tui_handle_startup_gates: AGENT_TUI_READY_PATTERN is unset\n' >&2
+    return 1
+  }
+
+  for (( i = 0; i < gate_count; i++ )); do
+    retired[i]=0
+  done
+
+  for (( pass = 1; pass <= max_passes; pass++ )); do
+    combined_pattern="${AGENT_TUI_READY_PATTERN}"
+    for (( i = 0; i < gate_count; i++ )); do
+      (( retired[i] == 0 )) || continue
+      combined_pattern="${combined_pattern}|${AGENT_TUI_GATE_PATTERNS[i]}"
+    done
+
+    # Wait for a startup gate to appear
+    sft_tmux_wait_until_regex \
+      "${combined_pattern}" \
+      "${AGENT_TUI_STARTUP_WAIT_SECS}" \
+      "${AGENT_TUI_POLL_INTERVAL_SECS}" || {
+        AGENT_TUI_FAILED=1
+        sft_agent_tui_write_screen_capture >&2 || true
+        return 1
+      }
+    frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
+
+    # Identify which startup gate did appear
+    matched=-1
+    for phase in before-ready after-ready; do
+      if [[ "${phase}" == "after-ready" ]] \
+        && sft_tmux_matches_regex "${AGENT_TUI_READY_PATTERN}" "${frame[@]}"; then
+        return 0
+      fi
+
+      for (( i = 0; i < gate_count; i++ )); do
+        (( retired[i] == 0 )) || continue
+        flags=" ${AGENT_TUI_GATE_FLAGS[i]} "
+        case "${phase}" in
+          before-ready) [[ "${flags}" == *" before-ready "* ]] || continue ;;
+          *) [[ "${flags}" != *" before-ready "* ]] || continue ;;
+        esac
+
+        if sft_tmux_matches_regex "${AGENT_TUI_GATE_PATTERNS[i]}" "${frame[@]}"; then
+          matched="${i}"
+          break 2
+        fi
+      done
+    done
+
+    # Lookup information for the matched startup gate
+    if (( matched < 0 )); then
+      # Unreachable situation, unless a future gate pattern does not survive
+      # being joined with | when it is added to ${combined_pattern} above
+      AGENT_TUI_FAILED=1
+      printf 'unhandled startup gate\n' >&2
+      sft_agent_tui_write_screen_capture "${frame[@]}" >&2 || true
+      return 1
+    fi
+    flags=" ${AGENT_TUI_GATE_FLAGS[matched]} "
+    # NOTE: Deliberately unquoted. tmux key names are single words, so the
+    #       stored list splits back into the arguments it was built from.
+    # shellcheck disable=SC2206
+    keys=(${AGENT_TUI_GATE_KEYS[matched]})
+
+    # If is a skip gate, exit the test
+    if [[ "${flags}" == *" skip "* ]]; then
+      skip "${AGENT_TUI_GATE_REASONS[matched]}"
+    fi
+
+    # Dismiss the gate by pressing the appropriate keys (if specified)
+    if (( ${#keys[@]} > 0 )); then
+      sft_agent_tui_dismiss_gate "${AGENT_TUI_GATE_PATTERNS[matched]}" "${keys[@]}"
+    else
+      sft_agent_tui_dismiss_gate "${AGENT_TUI_GATE_PATTERNS[matched]}"
+    fi
+
+    # If the gate is a --once gate, don't look for it again in the current loop
+    [[ "${flags}" != *" once "* ]] || retired[matched]=1
+  done
+
+  AGENT_TUI_FAILED=1
+  printf 'too many startup gate passes\n' >&2
+  sft_agent_tui_write_screen_capture >&2 || true
+  return 1
 }
 
 sft_agent_tui_wait_for_prompt_visible() {

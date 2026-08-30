@@ -12,14 +12,15 @@ load agent_tui_harness.bash
   local agent_home="${AGENT_TUI_WORKDIR}/copilot-home"
   local config_dir="${AGENT_TUI_WORKDIR}/copilot-config"
   local auth_log_path="${AGENT_TUI_ROOT}/copilot-login.log"
-  local input_ready_pattern='Please use /login|/ commands .* \? help'
-  local trust_gate_pattern='Confirm folder trust|Do you trust the files in this folder\?'
-  local permission_gate_pattern=""
-  local restart_gate_pattern=""
-  # Print if the `copilot` on PATH is the VS Code Copilot Chat launcher shim rather
-  # than the standalone GitHub Copilot CLI
-  local vsc_copilot_pattern='Cannot find GitHub Copilot CLI'
   local model="gpt-5.6-luna"
+
+  AGENT_TUI_READY_PATTERN='Please use /login|/ commands .* \? help'
+  sft_agent_tui_add_gate 'Confirm folder trust|Do you trust the files in this folder\?' Enter
+  # Printed if the `copilot` on PATH is the VS Code Copilot Chat launcher shim
+  # rather than the standalone GitHub Copilot CLI. Nothing to answer: the agent
+  # under test is not installed at all.
+  sft_agent_tui_add_skip_gate 'Cannot find GitHub Copilot CLI' \
+    'GitHub Copilot CLI not installed, although VS Code Copilot Chat launcher is present'
 
   prepare_agent_state "${agent_home}" "${config_dir}"
   login_agent "${config_dir}" "${auth_log_path}" "${model}"
@@ -39,12 +40,7 @@ load agent_tui_harness.bash
       "COPILOT_PROVIDER_WIRE_API=responses" \
       "COPILOT_MODEL=${model}" \
       copilot --no-auto-update
-  handle_startup_gates 1 || {
-    local gate_status=$?
-    (( gate_status == SFT_AGENT_TUI_GATE_SKIP )) \
-      && skip "GitHub Copilot CLI not installed, although VS Code Copilot Chat launcher is present"
-    return "${gate_status}"
-  }
+  sft_agent_tui_handle_startup_gates
   sft_tmux_assert_roundtrip
 }
 
@@ -75,72 +71,3 @@ configure_agent_tui() {
   return 0
 }
 
-# NOTE: Exits with special code SFT_AGENT_TUI_GATE_SKIP if
-#       ${vsc_copilot_pattern} is observed.
-handle_startup_gates() {
-  local pass="${1:-1}"
-  local combined_pattern="${input_ready_pattern}"
-  local gate_pattern=""
-  local -a gate_patterns=(
-    "${trust_gate_pattern:-}"
-    "${permission_gate_pattern:-}"
-    "${restart_gate_pattern:-}"
-  )
-
-  (( pass <= 5 )) || {
-    AGENT_TUI_FAILED=1
-    printf 'too many startup gate passes\n' >&2
-    sft_agent_tui_write_screen_capture >&2 || true
-    return 1
-  }
-
-  for gate_pattern in "${gate_patterns[@]}"; do
-    [[ -n "${gate_pattern}" ]] || continue
-    combined_pattern="${combined_pattern}|${gate_pattern}"
-  done
-
-  if [[ -n "${vsc_copilot_pattern:-}" ]]; then
-    combined_pattern="${combined_pattern}|${vsc_copilot_pattern}"
-  fi
-
-  sft_tmux_wait_until_regex \
-    "${combined_pattern}" \
-    "${AGENT_TUI_STARTUP_WAIT_SECS}" \
-    "${AGENT_TUI_POLL_INTERVAL_SECS}" || {
-      AGENT_TUI_FAILED=1
-      sft_agent_tui_write_screen_capture >&2 || true
-      return 1
-    }
-  local -a frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
-
-  if [[ -n "${vsc_copilot_pattern:-}" ]] && sft_tmux_matches_regex "${vsc_copilot_pattern}" "${frame[@]}"; then
-    return "${SFT_AGENT_TUI_GATE_SKIP}"
-  fi
-
-  if sft_tmux_matches_regex "${input_ready_pattern}" "${frame[@]}"; then
-    return 0
-  fi
-
-  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${trust_gate_pattern}" Enter
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${permission_gate_pattern}" Enter
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${restart_gate_pattern}"
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  AGENT_TUI_FAILED=1
-  printf 'unhandled startup gate\n' >&2
-  sft_agent_tui_write_screen_capture "${frame[@]}" >&2 || true
-  return 1
-}

@@ -12,11 +12,10 @@ load agent_tui_harness.bash
   local agent_home="${AGENT_TUI_WORKDIR}/kilo-code-home"
   local config_dir="${agent_home}/.config"
   local auth_log_path="${AGENT_TUI_ROOT}/kilo-code-login.log"
-  local input_ready_pattern='Ask anything|ctrl\+p commands|tab agents|Code[[:space:]]+'
-  local trust_gate_pattern=""
-  local permission_gate_pattern=""
-  local restart_gate_pattern='Performing one time database migration|Database migration complete'
   local model="openai/gpt-5.6-luna"
+
+  AGENT_TUI_READY_PATTERN='Ask anything|ctrl\+p commands|tab agents|Code[[:space:]]+'
+  sft_agent_tui_add_gate 'Performing one time database migration|Database migration complete'
 
   prepare_agent_state "${agent_home}" "${config_dir}"
   login_agent "${config_dir}" "${auth_log_path}" "${model}"
@@ -31,7 +30,7 @@ load agent_tui_harness.bash
       "XDG_STATE_HOME=${agent_home}/.local/state" \
       "XDG_DATA_HOME=${agent_home}/.local/share" \
       kilo --model="${model}"
-  handle_startup_gates 1
+  sft_agent_tui_handle_startup_gates
   sft_tmux_assert_roundtrip
 }
 
@@ -68,64 +67,4 @@ configure_agent_tui() {
   AGENT_TUI_PROMPT_SEND_MODE="slow"
   AGENT_TUI_PROMPT_CHAR_DELAY_SECS=0.05
   AGENT_TUI_SUBMIT_DELAY_SECS=1
-}
-
-handle_startup_gates() {
-  local pass="${1:-1}"
-  local combined_pattern="${input_ready_pattern}"
-  local gate_pattern=""
-  local -a gate_patterns=(
-    "${trust_gate_pattern:-}"
-    "${permission_gate_pattern:-}"
-    "${restart_gate_pattern:-}"
-  )
-
-  (( pass <= 5 )) || {
-    AGENT_TUI_FAILED=1
-    printf 'too many startup gate passes\n' >&2
-    sft_agent_tui_write_screen_capture >&2 || true
-    return 1
-  }
-
-  for gate_pattern in "${gate_patterns[@]}"; do
-    [[ -n "${gate_pattern}" ]] || continue
-    combined_pattern="${combined_pattern}|${gate_pattern}"
-  done
-
-  sft_tmux_wait_until_regex \
-    "${combined_pattern}" \
-    "${AGENT_TUI_STARTUP_WAIT_SECS}" \
-    "${AGENT_TUI_POLL_INTERVAL_SECS}" || {
-      AGENT_TUI_FAILED=1
-      sft_agent_tui_write_screen_capture >&2 || true
-      return 1
-    }
-  local -a frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
-
-  if sft_tmux_matches_regex "${input_ready_pattern}" "${frame[@]}"; then
-    return 0
-  fi
-
-  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${trust_gate_pattern}" Enter
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${permission_gate_pattern}" Enter
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}" "${frame[@]}"; then
-    sft_agent_tui_dismiss_gate "${restart_gate_pattern}"
-    handle_startup_gates "$((pass + 1))"
-    return $?
-  fi
-
-  AGENT_TUI_FAILED=1
-  printf 'unhandled startup gate\n' >&2
-  sft_agent_tui_write_screen_capture "${frame[@]}" >&2 || true
-  return 1
 }

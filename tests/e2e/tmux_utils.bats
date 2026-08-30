@@ -218,3 +218,115 @@ load agent_tui_harness.bash
   [ "${status}" -eq 0 ]
   [[ "${output}" != *"settled frame"* ]]
 }
+
+@test "[E2E-TUI] a before-ready gate is answered even when the ready pattern matches" {
+  local fake_agent_code=""
+
+  sft_require_cmd_or_skip "python3"
+
+  # An overlay that leaves the ready text visible behind it, the way cline's
+  # promo clips the input line without hiding it.
+  fake_agent_code=$'import sys, termios, tty, time\nfd = sys.stdin.fileno()\nold = termios.tcgetattr(fd)\nprint("READY> PROMO", flush=True)\ntry:\n    tty.setcbreak(fd)\n    sys.stdin.read(1)\n    sys.stdout.write("\\x1b[2J\\x1b[H")\n    print("READY>", flush=True)\nfinally:\n    termios.tcsetattr(fd, termios.TCSADRAIN, old)\ntime.sleep(5)\n'
+
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+
+  AGENT_TUI_READY_PATTERN='READY>'
+  sft_agent_tui_add_gate --before-ready 'PROMO' Escape
+
+  sft_agent_tui_handle_startup_gates
+
+  # Answering it is the whole point: a run that returned as soon as the ready
+  # pattern matched would leave the overlay swallowing the first keystrokes.
+  run sft_tmux_matches_regex 'PROMO'
+  [ "${status}" -ne 0 ]
+}
+
+@test "[E2E-TUI] an after-ready gate is left alone once the agent is ready" {
+  local fake_agent_code=""
+
+  sft_require_cmd_or_skip "python3"
+
+  # Gate text that stays on screen after the agent is ready, the way
+  # kilo-code's completed-migration notice does.
+  fake_agent_code=$'import time\nprint("READY> MIGRATION COMPLETE", flush=True)\ntime.sleep(5)\n'
+
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+
+  AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS=1
+  AGENT_TUI_READY_PATTERN='READY>'
+  sft_agent_tui_add_gate 'MIGRATION COMPLETE'
+
+  # Checking this gate ahead of the ready pattern would answer it on every
+  # pass and then fail, because the text never goes away.
+  sft_agent_tui_handle_startup_gates
+}
+
+@test "[E2E-TUI] a --once gate is retired after it has been answered" {
+  local fake_agent_code=""
+
+  sft_require_cmd_or_skip "python3"
+
+  # A gate whose text is still on screen after it has been answered, and that
+  # reports being answered a second time.
+  fake_agent_code=$'import sys, termios, tty, time\nfd = sys.stdin.fileno()\nold = termios.tcgetattr(fd)\nprint("ASK", flush=True)\ntry:\n    tty.setcbreak(fd)\n    sys.stdin.read(1)\n    sys.stdout.write("\\x1b[2J\\x1b[H")\n    print("READY> ASK", flush=True)\n    sys.stdin.read(1)\n    sys.stdout.write("\\x1b[2J\\x1b[H")\n    print("ANSWERED TWICE", flush=True)\nfinally:\n    termios.tcsetattr(fd, termios.TCSADRAIN, old)\ntime.sleep(5)\n'
+
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+
+  AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS=1
+  AGENT_TUI_READY_PATTERN='READY>'
+  sft_agent_tui_add_gate --before-ready --once 'ASK' Enter
+
+  sft_agent_tui_handle_startup_gates
+
+  run sft_tmux_matches_regex 'ANSWERED TWICE'
+  [ "${status}" -ne 0 ]
+}
+
+@test "[E2E-TUI] a skip gate skips the test with its reason instead of failing" {
+  local fake_agent_code=""
+
+  sft_require_cmd_or_skip "python3"
+
+  fake_agent_code=$'import time\nprint("Cannot find the agent", flush=True)\ntime.sleep(5)\n'
+
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+
+  AGENT_TUI_STARTUP_WAIT_SECS=2
+  AGENT_TUI_READY_PATTERN='READY>'
+  sft_agent_tui_add_skip_gate 'Cannot find the agent' 'the wrong binary is on PATH'
+
+  # Stands in for bats' own skip, which would skip this test rather than let it
+  # observe the skip. Exits like the real one, so the gate handler still never
+  # returns; `run` confines that exit to a subshell.
+  skip() {
+    printf 'SKIPPED: %s\n' "$1"
+    exit 0
+  }
+
+  run sft_agent_tui_handle_startup_gates
+
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"SKIPPED: the wrong binary is on PATH"* ]]
+  [ "${AGENT_TUI_FAILED}" -eq 0 ]
+}
+
+@test "[E2E-TUI] a gate that never clears runs out of passes" {
+  local fake_agent_code=""
+
+  sft_require_cmd_or_skip "python3"
+
+  fake_agent_code=$'import time\nprint("STUCK GATE", flush=True)\ntime.sleep(5)\n'
+
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+
+  AGENT_TUI_STARTUP_WAIT_SECS=2
+  AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS=1
+  AGENT_TUI_FAILURE_SETTLE_SECS=0
+  AGENT_TUI_GATE_MAX_PASSES=2
+  AGENT_TUI_READY_PATTERN='READY>'
+  sft_agent_tui_add_gate 'STUCK GATE' Enter
+
+  run sft_agent_tui_handle_startup_gates
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == *"too many startup gate passes"* ]]
+}

@@ -108,28 +108,32 @@ handle_startup_gates() {
       sft_agent_tui_write_screen_capture >&2 || true
       return 1
     }
+  local -a frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
 
-  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}"; then
+  if sft_tmux_matches_regex "${input_ready_pattern}" "${frame[@]}"; then
+    return 0
+  fi
+
+  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${trust_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}"; then
+  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${permission_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}"; then
+  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${restart_gate_pattern}"
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  # Once the combined wait above has seen either the ready screen or the trust
-  # prompt, Codex can repaint between captures. If no known gate is still
-  # visible, treat the session as ready and let the roundtrip assertion own any
-  # later failure.
-  return 0
+  AGENT_TUI_FAILED=1
+  printf 'unhandled startup gate\n' >&2
+  sft_agent_tui_write_screen_capture "${frame[@]}" >&2 || true
+  return 1
 }

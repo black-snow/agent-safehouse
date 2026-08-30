@@ -39,7 +39,12 @@ load agent_tui_harness.bash
       "COPILOT_PROVIDER_WIRE_API=responses" \
       "COPILOT_MODEL=${model}" \
       copilot --no-auto-update
-  handle_startup_gates 1
+  handle_startup_gates 1 || {
+    local gate_status=$?
+    (( gate_status == SFT_AGENT_TUI_GATE_SKIP )) \
+      && skip "GitHub Copilot CLI not installed, although VS Code Copilot Chat launcher is present"
+    return "${gate_status}"
+  }
   sft_tmux_assert_roundtrip
 }
 
@@ -70,6 +75,8 @@ configure_agent_tui() {
   return 0
 }
 
+# NOTE: Exits with special code SFT_AGENT_TUI_GATE_SKIP if
+#       ${vsc_copilot_pattern} is observed.
 handle_startup_gates() {
   local pass="${1:-1}"
   local combined_pattern="${input_ready_pattern}"
@@ -106,7 +113,7 @@ handle_startup_gates() {
     }
 
   if [[ -n "${vsc_copilot_pattern:-}" ]] && sft_tmux_matches_regex "${vsc_copilot_pattern}"; then
-    skip "GitHub Copilot CLI not installed, although VS Code Copilot Chat launcher is present"
+    return "${SFT_AGENT_TUI_GATE_SKIP}"
   fi
 
   if sft_tmux_matches_regex "${input_ready_pattern}"; then

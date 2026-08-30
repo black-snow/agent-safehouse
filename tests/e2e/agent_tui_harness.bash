@@ -9,6 +9,13 @@
 
 SFT_AGENT_TUI_HELPER_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
+# Status a startup-gate handler returns to ask its caller to skip the test
+# rather than fail it: the screen showed something that means "this agent is
+# not testable here", not a gate to dismiss. Deliberately far from the 0/1
+# range the gate handlers and tmux helpers use for ready/failed, so a stray
+# nonzero status from some other command is never mistaken for it.
+SFT_AGENT_TUI_GATE_SKIP=111
+
 setup() {
   sft_setup_test_env
   sft_agent_tui_setup_test_env

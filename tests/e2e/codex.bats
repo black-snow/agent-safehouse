@@ -53,6 +53,7 @@ prepare_agent_state() {
 model = "${model}"
 model_reasoning_effort = "medium"
 preferred_auth_method = "apikey"
+check_for_update_on_startup = false
 
 [projects."${AGENT_TUI_WORKDIR}"]
 trust_level = "trusted"

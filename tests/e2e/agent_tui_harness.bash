@@ -44,6 +44,7 @@ sft_agent_tui_setup_test_env() {
   AGENT_TUI_PROMPT_VISIBLE_TIMEOUT_SECS="${SAFEHOUSE_AGENT_TUI_PROMPT_VISIBLE_TIMEOUT_SECS:-5}"
   AGENT_TUI_POLL_INTERVAL_SECS="${SAFEHOUSE_AGENT_TUI_POLL_INTERVAL_SECS:-0.2}"
   AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS="${SAFEHOUSE_AGENT_TUI_GATE_CLEAR_TIMEOUT_SECS:-5}"
+  AGENT_TUI_FAILURE_SETTLE_SECS="${SAFEHOUSE_AGENT_TUI_FAILURE_SETTLE_SECS:-2.0}"
   AGENT_TUI_PRE_PROMPT_DELAY_SECS="${SAFEHOUSE_AGENT_TUI_PRE_PROMPT_DELAY_SECS:-0}"
   AGENT_TUI_SUBMIT_DELAY_SECS="${SAFEHOUSE_AGENT_TUI_SUBMIT_DELAY_SECS:-0.3}"
   AGENT_TUI_KEEP_SESSION="${SAFEHOUSE_AGENT_TUI_KEEP_SESSION:-0}"
@@ -472,13 +473,17 @@ sft_safehouse_run_capture() {
 
 # Dump the screen for a failure report.
 #
-# Given the frame the caller actually judged, print that frame first and then
-# the live screen when it has moved on. Reporting a failure with a fresh
-# capture alone is misleading: the screen keeps painting after the decision, so
-# the dump can show a state that would have been handled. Diagnosing a
-# get-set race needs both halves of the story.
+# Prints up to three sections, each shown only when it differs from the one
+# before it:
+# 1. decision frame: the frame the caller actually judged, when it passed one.
+# 2. current frame: the screen at the moment of failure.
+# 3. settled frame: the screen after AGENT_TUI_FAILURE_SETTLE_SECS more.
 sft_agent_tui_write_screen_capture() {
   local -a decision_frame=()
+  local settle_secs="${AGENT_TUI_FAILURE_SETTLE_SECS:-2.0}"
+  local captured=0
+  local shown_normal=""
+  local shown_alt=""
   local frame_change=""
   local report=""
 
@@ -491,23 +496,52 @@ sft_agent_tui_write_screen_capture() {
       ;;
   esac
 
-  sft_tmux_capture_full 2>/dev/null || true
+  # Capture current frame (and check whether TUI session still available)
+  if sft_tmux_capture_full 2>/dev/null; then
+    captured=1
+  fi
 
+  # Print:
+  # 1. decision frame (if available)
+  # 2. current frame
   if (( ${#decision_frame[@]} == 2 )); then
     report="--- decision frame ---"$'\n'
     report="${report}$(sft_tmux_select_capture "${decision_frame[0]}" "${decision_frame[1]}")"$'\n'
+    shown_normal="${decision_frame[0]}"
+    shown_alt="${decision_frame[1]}"
 
     frame_change="$(sft_agent_tui_describe_frame_change \
-      "${decision_frame[0]}" "${decision_frame[1]}" \
+      "${shown_normal}" "${shown_alt}" \
       "${SFT_TMUX_LAST_CAPTURE[0]}" "${SFT_TMUX_LAST_CAPTURE[1]}")"
 
     if [[ -n "${frame_change}" ]]; then
       report="${report}--- current frame (${frame_change}) ---"$'\n'
       report="${report}$(sft_tmux_select_capture "${SFT_TMUX_LAST_CAPTURE[@]}")"$'\n'
+      shown_normal="${SFT_TMUX_LAST_CAPTURE[0]}"
+      shown_alt="${SFT_TMUX_LAST_CAPTURE[1]}"
     fi
   else
     report="--- current frame (no decision frame) ---"$'\n'
     report="${report}$(sft_tmux_select_capture "${SFT_TMUX_LAST_CAPTURE[@]}")"$'\n'
+    shown_normal="${SFT_TMUX_LAST_CAPTURE[0]}"
+    shown_alt="${SFT_TMUX_LAST_CAPTURE[1]}"
+  fi
+  
+  # Print:
+  # 3. settled frame (unless session is gone, assumed when first capture failed)
+  if (( captured == 1 )) && [[ "${settle_secs}" != "0" && "${settle_secs}" != "0.0" ]]; then
+    sleep "${settle_secs}"
+
+    if sft_tmux_capture_full 2>/dev/null; then
+      frame_change="$(sft_agent_tui_describe_frame_change \
+        "${shown_normal}" "${shown_alt}" \
+        "${SFT_TMUX_LAST_CAPTURE[0]}" "${SFT_TMUX_LAST_CAPTURE[1]}")"
+
+      if [[ -n "${frame_change}" ]]; then
+        report="${report}--- settled frame, +${settle_secs}s (${frame_change}) ---"$'\n'
+        report="${report}$(sft_tmux_select_capture "${SFT_TMUX_LAST_CAPTURE[@]}")"$'\n'
+      fi
+    fi
   fi
 
   if [[ -n "${AGENT_TUI_SCREEN_PATH:-}" ]]; then

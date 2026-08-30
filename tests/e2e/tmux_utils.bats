@@ -187,3 +187,34 @@ load agent_tui_harness.bash
   [[ "${output}" == *"decision frame"* ]]
   [[ "${output}" != *"current frame"* ]]
 }
+
+@test "[E2E-TUI] a failure dump reports a state that lands just after the timeout" {
+  local fake_agent_code=""
+  local -a frame=()
+
+  sft_require_cmd_or_skip "python3"
+
+  # A screen that reaches the awaited state about a second late.
+  fake_agent_code=$'import sys, time\nprint("WAITING", flush=True)\ntime.sleep(1)\nsys.stdout.write("\\x1b[2J\\x1b[H")\nprint("ARRIVED", flush=True)\ntime.sleep(5)\n'
+
+  sft_tmux_start_session python3 -u -c "${fake_agent_code}"
+  sft_tmux_wait_until_regex 'WAITING' 2 0.1
+  frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
+
+  # A timeout too short to see what is about to arrive.
+  run sft_tmux_wait_until_regex 'ARRIVED' 0 0.1
+  [ "${status}" -ne 0 ]
+
+  AGENT_TUI_FAILURE_SETTLE_SECS=2.0
+  run sft_agent_tui_write_screen_capture "${frame[@]}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"WAITING"* ]]
+  [[ "${output}" == *"settled frame, +2.0s ("*"buffer"*")"* ]]
+  [[ "${output}" == *"ARRIVED"* ]]
+
+  # Turning the settle delay off drops the extra section.
+  AGENT_TUI_FAILURE_SETTLE_SECS=0
+  run sft_agent_tui_write_screen_capture "${frame[@]}"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" != *"settled frame"* ]]
+}

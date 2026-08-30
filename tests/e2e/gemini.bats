@@ -14,6 +14,10 @@ load agent_tui_harness.bash
   local auth_log_path="${AGENT_TUI_ROOT}/gemini-login.log"
   local trusted_folders_path="${config_dir}/trustedFolders.json"
   local system_settings_path="${config_dir}/system-settings.json"
+  local input_ready_pattern='Type your message|@path/to/file|YOLO ctrl\+y'
+  local trust_gate_pattern='Do you trust the files in this folder'
+  local permission_gate_pattern='Get started|How would you like to authenticate for this project\?|Existing API key detected|Use Gemini API Key|Use Enter to select'
+  local restart_gate_pattern='Gemini CLI is restarting to apply the trust changes'
   
   prepare_agent_state "${agent_home}" "${config_dir}" "${trusted_folders_path}" "${system_settings_path}"
   login_agent "${config_dir}" "${auth_log_path}" "${model}"
@@ -93,10 +97,6 @@ configure_agent_tui() {
 
 handle_startup_gates() {
   local pass="${1:-1}"
-  local input_ready_pattern='Type your message|@path/to/file|YOLO ctrl\+y'
-  local trust_gate_pattern='Do you trust the files in this folder'
-  local permission_gate_pattern='Get started|How would you like to authenticate for this project\?|Existing API key detected|Use Gemini API Key|Use Enter to select'
-  local restart_gate_pattern='Gemini CLI is restarting to apply the trust changes'
   local combined_pattern="${input_ready_pattern}"
   local gate_pattern=""
   local -a gate_patterns=(
@@ -125,32 +125,32 @@ handle_startup_gates() {
       sft_agent_tui_write_screen_capture >&2 || true
       return 1
     }
+  local -a frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
 
-  if sft_tmux_matches_regex "${input_ready_pattern}"; then
+  if sft_tmux_matches_regex "${input_ready_pattern}" "${frame[@]}"; then
     return 0
   fi
 
-  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}"; then
+  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${trust_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}"; then
+  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${permission_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}"; then
+  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${restart_gate_pattern}"
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  # Once the combined wait above has seen either the ready screen or a known
-  # gate, Gemini can repaint between captures. If no known gate is still
-  # visible, treat the session as ready and let the roundtrip assertion own any
-  # later failure.
-  return 0
+  AGENT_TUI_FAILED=1
+  printf 'unhandled startup gate\n' >&2
+  sft_agent_tui_write_screen_capture "${frame[@]}" >&2 || true
+  return 1
 }

@@ -39,7 +39,12 @@ load agent_tui_harness.bash
       "COPILOT_PROVIDER_WIRE_API=responses" \
       "COPILOT_MODEL=${model}" \
       copilot --no-auto-update
-  handle_startup_gates 1
+  handle_startup_gates 1 || {
+    local gate_status=$?
+    (( gate_status == SFT_AGENT_TUI_GATE_SKIP )) \
+      && skip "GitHub Copilot CLI not installed, although VS Code Copilot Chat launcher is present"
+    return "${gate_status}"
+  }
   sft_tmux_assert_roundtrip
 }
 
@@ -70,6 +75,8 @@ configure_agent_tui() {
   return 0
 }
 
+# NOTE: Exits with special code SFT_AGENT_TUI_GATE_SKIP if
+#       ${vsc_copilot_pattern} is observed.
 handle_startup_gates() {
   local pass="${1:-1}"
   local combined_pattern="${input_ready_pattern}"
@@ -104,28 +111,29 @@ handle_startup_gates() {
       sft_agent_tui_write_screen_capture >&2 || true
       return 1
     }
+  local -a frame=("${SFT_TMUX_LAST_CAPTURE[@]}")
 
-  if [[ -n "${vsc_copilot_pattern:-}" ]] && sft_tmux_matches_regex "${vsc_copilot_pattern}"; then
-    skip "GitHub Copilot CLI not installed, although VS Code Copilot Chat launcher is present"
+  if [[ -n "${vsc_copilot_pattern:-}" ]] && sft_tmux_matches_regex "${vsc_copilot_pattern}" "${frame[@]}"; then
+    return "${SFT_AGENT_TUI_GATE_SKIP}"
   fi
 
-  if sft_tmux_matches_regex "${input_ready_pattern}"; then
+  if sft_tmux_matches_regex "${input_ready_pattern}" "${frame[@]}"; then
     return 0
   fi
 
-  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}"; then
+  if [[ -n "${trust_gate_pattern:-}" ]] && sft_tmux_matches_regex "${trust_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${trust_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}"; then
+  if [[ -n "${permission_gate_pattern:-}" ]] && sft_tmux_matches_regex "${permission_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${permission_gate_pattern}" Enter
     handle_startup_gates "$((pass + 1))"
     return $?
   fi
 
-  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}"; then
+  if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}" "${frame[@]}"; then
     sft_agent_tui_dismiss_gate "${restart_gate_pattern}"
     handle_startup_gates "$((pass + 1))"
     return $?
@@ -133,6 +141,6 @@ handle_startup_gates() {
 
   AGENT_TUI_FAILED=1
   printf 'unhandled startup gate\n' >&2
-  sft_agent_tui_write_screen_capture >&2 || true
+  sft_agent_tui_write_screen_capture "${frame[@]}" >&2 || true
   return 1
 }

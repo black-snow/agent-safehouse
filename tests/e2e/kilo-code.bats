@@ -118,15 +118,9 @@ handle_startup_gates() {
   fi
 
   if [[ -n "${restart_gate_pattern:-}" ]] && sft_tmux_matches_regex "${restart_gate_pattern}"; then
-    sft_tmux_wait_until_regex \
-      "${input_ready_pattern}" \
-      "${AGENT_TUI_STARTUP_WAIT_SECS}" \
-      "${AGENT_TUI_POLL_INTERVAL_SECS}" || {
-        AGENT_TUI_FAILED=1
-        sft_agent_tui_write_screen_capture >&2 || true
-        return 1
-      }
-    return 0
+    sft_agent_tui_dismiss_gate "${restart_gate_pattern}"
+    handle_startup_gates "$((pass + 1))"
+    return $?
   fi
 
   AGENT_TUI_FAILED=1

@@ -13,6 +13,10 @@ load agent_tui_harness.bash
   local config_dir="${AGENT_TUI_WORKDIR}/opencode-config"
   local auth_log_path="${AGENT_TUI_ROOT}/opencode-login.log"
   local model="anthropic/claude-sonnet-5"
+  local input_ready_pattern='Ask anything'
+  local trust_gate_pattern=""
+  local permission_gate_pattern=""
+  local restart_gate_pattern=""
 
   prepare_agent_state "${agent_home}" "${config_dir}"
   login_agent "${config_dir}" "${auth_log_path}" "${model}"
@@ -52,10 +56,6 @@ configure_agent_tui() {
 
 handle_startup_gates() {
   local pass="${1:-1}"
-  local input_ready_pattern='Ask anything'
-  local trust_gate_pattern=""
-  local permission_gate_pattern=""
-  local restart_gate_pattern=""
   local combined_pattern="${input_ready_pattern}"
   local gate_pattern=""
   local -a gate_patterns=(

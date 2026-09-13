@@ -131,3 +131,43 @@ with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
   [ "$status" -eq 0 ]
   [ "$output" = "sandboxed-uv-success" ]
 }
+
+@test "[POLICY-ONLY] default profile keeps the uv tool directory read-only" {
+  local profile
+  profile="$(safehouse_profile)"
+
+  sft_assert_contains "$profile" "(deny file-write*"
+  sft_assert_contains "$profile" "(home-subpath \"/.local/share/uv/tools\")"
+}
+
+@test "[EXECUTION] installed uv tool payloads are readable but not writable" {
+  local fake_home tool_bin
+
+  fake_home="$(sft_fake_home)" || return 1
+  tool_bin="${fake_home}/.local/share/uv/tools/ruff/bin/ruff"
+
+  sft_make_fake_command "$tool_bin" || return 1
+
+  # Running an installed tool stays in scope: the payload is readable and exec'able.
+  HOME="$fake_home" safehouse_ok -- /bin/cat "$tool_bin" >/dev/null
+  HOME="$fake_home" safehouse_ok -- "$tool_bin"
+
+  # Mutating it is not. This covers both `uv tool upgrade` rewriting the payload and
+  # the __pycache__ writes a Python tool attempts on first run.
+  HOME="$fake_home" safehouse_denied -- /usr/bin/touch "${tool_bin}.new"
+  HOME="$fake_home" safehouse_denied -- /bin/mkdir "$(dirname "$tool_bin")/__pycache__"
+}
+
+@test "[EXECUTION] uv managed interpreters stay writable" {
+  local fake_home python_dir
+
+  fake_home="$(sft_fake_home)" || return 1
+  python_dir="${fake_home}/.local/share/uv/python"
+
+  mkdir -p "$python_dir" || return 1
+
+  # `uv run`, `uv sync` and `uv venv --python X.Y` provision interpreters here as
+  # ordinary project work, so narrowing tools/ must not reach python/.
+  HOME="$fake_home" safehouse_ok -- /usr/bin/touch "${python_dir}/cpython-marker"
+  sft_assert_file_exists "${python_dir}/cpython-marker"
+}

@@ -45,3 +45,9 @@
     (home-subpath "/.config/hatch")
     (home-subpath "/.local/share/hatch")
 )
+
+;; `uv tool install X` writes the binary under ~/.local/share/uv/tools and
+;; links ~/.local/bin/X to it.
+(allow file-read*
+    (home-literal "/.local/bin/ruff")          ;; ruff entrypoint when installed via `uv tool install ruff`.
+)

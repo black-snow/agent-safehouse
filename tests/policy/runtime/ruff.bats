@@ -7,7 +7,7 @@
 load ../../test_helper.bash
 
 @test "[EXECUTION] ruff can lint a file inside the sandbox" {
-  local ruff_bin source_file "code"
+  local ruff_bin source_file
   ruff_bin="$(sft_command_path_or_skip ruff)" || return 1
   source_file="$(sft_workspace_path "sample.py")" || return 1
 
@@ -51,7 +51,7 @@ EOF
 }
 
 @test "[EXECUTION] ruff can format a file inside the sandbox" {
-  local ruff_bin source_file "code"
+  local ruff_bin source_file
   ruff_bin="$(sft_command_path_or_skip ruff)" || return 1
   source_file="$(sft_workspace_path "format_test.py")" || return 1
 
@@ -78,7 +78,6 @@ EOF
   local py_file
   py_file="$(sft_workspace_path "config_test.py")" || return 1
 
-  # Standalone ruff config: no [tool.ruff] wrapper (that is pyproject.toml only)
   cat > "$source_file" <<'EOF'
 line-length = 20
 [lint]

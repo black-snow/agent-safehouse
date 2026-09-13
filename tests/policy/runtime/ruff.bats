@@ -45,9 +45,10 @@ EOF
   run safehouse_ok -- "$ruff_bin" check "$source_file"
   [ "$status" -eq 0 ]
 
-  # Ruff's default cache is .ruff_cache under the working directory
-  run safehouse_ok -- ls "$cache_dir"
+  # Assert an actual cache file was written
+  run safehouse_ok -- find "$cache_dir" -type f
   [ "$status" -eq 0 ]
+  [ -n "$output" ]
 }
 
 @test "[EXECUTION] ruff can format a file inside the sandbox" {

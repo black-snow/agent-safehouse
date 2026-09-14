@@ -117,18 +117,42 @@ load ../procargs_utils.bash
   HOME="$fake_home" safehouse_denied -- /bin/cat "$cache_file"
 }
 
-@test "[EXECUTION] default sandbox can list ~/.local/bin without reading installed helper contents" {
-  local fake_home local_bin_dir helper_path
+@test "[EXECUTION] default sandbox can read ~/.local/bin entries but not write them" {
+  local fake_home local_bin_dir helper_path planted_path
 
   fake_home="$(sft_fake_home)" || return 1
   local_bin_dir="${fake_home}/.local/bin"
   helper_path="${local_bin_dir}/voice-helper"
+  planted_path="${local_bin_dir}/planted"
 
   mkdir -p "$local_bin_dir"
-  printf '%s\n' "secret-helper" > "$helper_path"
+  printf '%s\n' "installed-helper" > "$helper_path"
 
   HOME="$fake_home" safehouse_ok -- /bin/ls "$local_bin_dir" >/dev/null
-  HOME="$fake_home" safehouse_denied -- /bin/cat "$helper_path"
+  HOME="$fake_home" safehouse_ok -- /bin/cat "$helper_path"
+
+  # ~/.local/bin is on the user's PATH. Anything planted here would run later
+  # outside the sandbox, so writes stay denied for new and existing entries.
+  HOME="$fake_home" safehouse_denied -- /usr/bin/touch "$planted_path"
+  HOME="$fake_home" safehouse_denied -- /usr/bin/touch "$helper_path"
+}
+
+@test "[EXECUTION] the ~/.local/bin grant does not open symlink targets elsewhere" {
+  local fake_home target shim
+
+  fake_home="$(sft_fake_home)" || return 1
+  target="${fake_home}/.local/share/unknown-tool/bin/unknown-tool"
+  shim="${fake_home}/.local/bin/unknown-tool"
+
+  sft_make_fake_command "$target" || return 1
+  mkdir -p "${fake_home}/.local/bin" || return 1
+  /bin/ln -sfn "$target" "$shim"
+
+  # The shim resolves because ~/.local/bin is readable. The payload is a Mach-O
+  # binary, which execs without a read grant; a script would need one, since its
+  # interpreter reads the file. Reading the payload stays denied either way.
+  HOME="$fake_home" safehouse_ok -- "$shim"
+  HOME="$fake_home" safehouse_denied -- /bin/cat "$target"
 }
 
 @test "[POLICY-ONLY] default profile grants XDG base directory roots creation, literal-scoped" {

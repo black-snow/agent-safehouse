@@ -20,7 +20,7 @@ These are baseline allowances intended to keep common workflows functional:
 - Metadata-only traversal on `/`, the path to `$HOME`, and `$HOME` itself so runtimes can reach explicitly allowed home-scoped paths without opening broad home reads.
 - Directory-root reads for `~/.config` and `~/.cache` so tools can discover XDG locations; contents under those trees still need more specific grants.
 - Core system/runtime paths required by shells, compilers, and package managers.
-- Binaries already installed by package managers like Nix are read-only and can be run.
+- Binaries already installed globally by package managers are read-only and can be run, including those in the XDG binary directory `~/.local/bin`.
 - Toolchain profile access under `profiles/30-toolchains/`.
 - Curated Apple Command Line Tools shim targets for common `/usr/bin` developer commands such as `git`, `make`, and `clang`.
 - Core integrations in `profiles/50-integrations-core/` (`container-runtime-default-deny`, `git`, `scm-clis`, `ssh-agent-default-deny`, `worktree-common-dir`, `worktrees`).

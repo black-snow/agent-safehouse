@@ -105,13 +105,6 @@ EOF
   sft_assert_contains "$profile" "(home-subpath \"/.cache/ruff\")"
 }
 
-@test "[POLICY-ONLY] default profile includes the uv-managed ruff entrypoint" {
-  local profile
-  profile="$(safehouse_profile)"
-
-  sft_assert_contains "$profile" "(home-literal \"/.local/bin/ruff\")"
-}
-
 @test "[EXECUTION] ruff installed via uv tool install is runnable in the sandbox" {
   local fake_home tool_bin shim
 
@@ -120,9 +113,7 @@ EOF
   shim="${fake_home}/.local/bin/ruff"
 
   # Reproduce the `uv tool install ruff` layout: the real binary lives under
-  # ~/.local/share/uv/tools, and ~/.local/bin/ruff is a symlink to it. The
-  # target is already covered by the uv data-dir grant; the symlink on PATH is
-  # the entrypoint that needs its own grant.
+  # ~/.local/share/uv/tools, and ~/.local/bin/ruff is a symlink to it.
   sft_make_fake_command "$tool_bin" || return 1
   mkdir -p "${fake_home}/.local/bin" || return 1
   /bin/ln -sfn "$tool_bin" "$shim"
@@ -146,18 +137,18 @@ EOF
   HOME="$fake_home" safehouse_denied -- /bin/ln -sfn "$tool_bin" "$shim"
 }
 
-@test "[EXECUTION] the uv-managed ruff grant does not open other uv tool entrypoints" {
+@test "[EXECUTION] other uv tool entrypoints resolve without a per-tool grant" {
   local fake_home other_target other_shim
 
   fake_home="$(sft_fake_home)" || return 1
   other_target="${fake_home}/.local/share/uv/tools/black/bin/black"
   other_shim="${fake_home}/.local/bin/black"
 
-  # Scoping boundary: naming ruff must not make every uv-installed entrypoint
-  # resolvable. Broad ~/.local/bin access is deliberately left to issue #140.
+  # No profile names black. The shim resolves because ~/.local/bin is readable,
+  # so uv-installed tools run without a grant each.
   sft_make_fake_command "$other_target" || return 1
   mkdir -p "${fake_home}/.local/bin" || return 1
   /bin/ln -sfn "$other_target" "$other_shim"
 
-  HOME="$fake_home" safehouse_denied -- "$other_shim"
+  HOME="$fake_home" safehouse_ok -- "$other_shim"
 }
